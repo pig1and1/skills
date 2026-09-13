@@ -1,0 +1,141 @@
+/* Data table baseline.
+ *
+ * Every block below names the failure it prevents -- those failures are the
+ * reason the rules exist, not stylistic preference. Copy this, then replace the
+ * token values with your palette. Row height (36px) is assumed in three places:
+ * the td height, the intrinsic size, and the row-height prop of VirtualTable.
+ * Change it in all three or scrolling will jump.
+ */
+
+/* ---- scroll container -------------------------------------------------- */
+
+.table-scroll {
+  /* Keeps the table from reflowing when the scrollbar appears or disappears. */
+  scrollbar-gutter: stable;
+  overflow: auto;
+  /* Isolate layout and paint work inside the scroller. */
+  contain: layout paint;
+}
+
+/* ---- table skeleton ---------------------------------------------------- */
+
+table.data-table {
+  /* Column widths come from <colgroup>, never from measured content. With auto
+   * layout the browser derives widths from whichever rows are currently
+   * rendered, so a virtualized list re-sizes its columns on every scroll. */
+  table-layout: fixed;
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  /* Equal-width digits. Without this, numeric columns visibly resize as values
+   * change (proportional digits are not monospaced). */
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+
+.data-table th,
+.data-table td {
+  /* 36px row: the "regular" density from the skill. Keep in sync with the
+   * scroll math. */
+  height: 36px;
+  padding: 8px 12px;
+  box-sizing: border-box;
+  text-align: left;
+  /* No vertical rules anywhere: horizontal rhythm only. */
+  border: 0;
+  vertical-align: middle;
+}
+
+/* ---- header ------------------------------------------------------------ */
+
+.data-table thead th {
+  /* Opaque background is mandatory. A sticky header with a transparent one
+   * lets rows scroll through it. */
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--table-header-bg);
+  color: var(--table-header-fg);
+  font-size: 12px;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+  /* Separate header from body by weight and colour, not by a heavy rule. */
+  box-shadow: inset 0 -1px 0 var(--table-border);
+}
+
+/* ---- rows -------------------------------------------------------------- */
+
+.data-table tbody tr {
+  /* The only horizontal line in the table. */
+  box-shadow: inset 0 -1px 0 var(--table-border);
+}
+
+.data-table tbody tr:hover {
+  background: var(--table-row-hover);
+}
+
+/* Selected must read stronger than hover, or selection is invisible. */
+.data-table tbody tr[aria-selected='true'] {
+  background: var(--table-row-selected);
+}
+
+/* Keyboard focus has to stay visible: hover is not the only way to find a row. */
+.data-table tbody tr:focus-visible {
+  outline: 2px solid var(--table-focus);
+  outline-offset: -2px;
+}
+
+/* ---- cell modifiers ---------------------------------------------------- */
+
+/* Apply to numeric columns. */
+.data-table .num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.data-table .center {
+  text-align: center;
+}
+
+/* Long cell content ellipsizes instead of widening the column. */
+.data-table .ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- optional: non-virtualized lists only ------------------------------ */
+
+/* Off-screen rows skip rendering work. Use this ONLY when you are not
+ * virtualizing -- stacking it on top of a virtualizer buys nothing and adds a
+ * known failure: rebuilding a row element discards the "last remembered size",
+ * the row falls back to this intrinsic value, and if that value is smaller than
+ * the real height the scroll height collapses and the scroller jumps.
+ * The 36px below must equal the real row height. */
+/*
+.data-table tbody tr {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 36px;
+}
+*/
+
+/* ---- tokens ------------------------------------------------------------ */
+
+:root {
+  --table-border: color-mix(in srgb, currentColor 12%, transparent);
+  --table-header-bg: #ffffff;
+  --table-header-fg: #55596b;
+  --table-row-hover: #f5f6f8;
+  --table-row-selected: #e8f0fe;
+  --table-focus: #3b6cf6;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --table-header-bg: #17181c;
+    --table-header-fg: #9aa0b0;
+    --table-row-hover: #1f2126;
+    --table-row-selected: #1d2b45;
+    --table-focus: #6d92ff;
+  }
+}

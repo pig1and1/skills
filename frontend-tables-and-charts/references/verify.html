@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>frontend-table-design — 规则自验证</title>
+<style>
+  :root {
+    --table-border: color-mix(in srgb, currentColor 12%, transparent);
+    --table-header-bg: #ffffff;
+    --table-header-fg: #55596b;
+    --table-row-hover: #f5f6f8;
+    --table-row-selected: #e8f0fe;
+    --table-focus: #3b6cf6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --table-header-bg: #17181c;
+      --table-header-fg: #9aa0b0;
+      --table-row-hover: #1f2126;
+      --table-row-selected: #1d2b45;
+      --table-focus: #6d92ff;
+    }
+  }
+
+  body {
+    font: 13px/1.6 ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+    margin: 0; padding: 24px; background: #fafbfc; color: #1c1e26;
+  }
+  @media (prefers-color-scheme: dark) { body { background: #101114; color: #e6e8ee; } }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  h2 { font-size: 14px; margin: 28px 0 8px; }
+  p.note { color: #6b7280; margin: 0 0 16px; max-width: 76ch; }
+  code { background: color-mix(in srgb, currentColor 8%, transparent); padding: 1px 5px; border-radius: 4px; }
+
+  .panel {
+    position: sticky; top: 0; z-index: 50;
+    background: color-mix(in srgb, Canvas 92%, transparent);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--table-border); border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 8px;
+  }
+  .panel button {
+    font: inherit; padding: 5px 10px; margin: 0 6px 6px 0; cursor: pointer;
+    border: 1px solid var(--table-border); border-radius: 6px;
+    background: var(--table-header-bg); color: inherit;
+  }
+  .panel button[aria-pressed="true"] { background: var(--table-row-selected); border-color: var(--table-focus); }
+  #readout { font-family: ui-monospace, Consolas, monospace; font-size: 12px; white-space: pre-wrap; margin-top: 8px; }
+  .ok { color: #15803d; } .bad { color: #b91c1c; } .warn { color: #a16207; }
+  @media (prefers-color-scheme: dark) { .ok { color: #4ade80; } .bad { color: #f87171; } .warn { color: #fbbf24; } }
+
+  /* ===================== 被测规则（来自 references/table.css） ===================== */
+
+  .table-scroll { scrollbar-gutter: stable; overflow: auto; contain: layout paint; }
+
+  table.data-table {
+    table-layout: fixed;            /* 规则 1：列宽由 <colgroup> 决定，绝不测量内容 */
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    font-variant-numeric: tabular-nums;   /* 规则 2：等宽数字 */
+    font-size: 13px;
+  }
+  .data-table th, .data-table td {
+    height: 36px; padding: 8px 12px; box-sizing: border-box;
+    text-align: left; border: 0; vertical-align: middle;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .data-table thead th {
+    position: sticky; top: 0; z-index: 2;
+    background: var(--table-header-bg);   /* 规则 3：粘性表头必须不透明 */
+    color: var(--table-header-fg);
+    font-size: 12px; font-weight: 550;
+    box-shadow: inset 0 -1px 0 var(--table-border);
+  }
+  .data-table tbody tr { box-shadow: inset 0 -1px 0 var(--table-border); }
+  .data-table tbody tr:hover { background: var(--table-row-hover); }
+  .data-table .num { text-align: right; }
+
+  /* 开关：用于制造对照组 */
+  body.auto-layout table.data-table { table-layout: auto; }        /* 关掉规则 1 */
+  body.no-tabular table.data-table { font-variant-numeric: normal; } /* 关掉规则 2 */
+
+  /* 规则 4 的可选优化：仅在「不虚拟滚动」时才该用，见第三块 */
+  .cv-on tbody tr { content-visibility: auto; contain-intrinsic-size: auto 36px; }
+
+  .tall-row td { height: 200px !important; }
+
+  /* 原生 JS 版虚拟表格的骨架：spacer 撑起滚动高度，tbody 绝对定位在其中 */
+  .vspacer { position: relative; }
+  .vbody { position: absolute; top: 0; left: 0; width: 100%; }
+</style>
+</head>
+<body>
+
+<h1>frontend-table-design — 规则自验证</h1>
+<p class="note">
+  这个页面不靠肉眼判断，而是<strong>读数值</strong>：每块都记录滚动前后的列宽快照、或 <code>scrollHeight</code>，
+  并在下方给出 <span class="ok">通过</span> / <span class="bad">失败</span> 判定。
+  先按默认（规则全开）滚一遍，再点开关制造对照组。
+</p>
+
+<div class="panel">
+  <button id="t-auto" aria-pressed="false">对照组：<code>table-layout: auto</code></button>
+  <button id="t-tabular" aria-pressed="false">对照组：<code>font-variant-numeric: normal</code></button>
+  <button id="t-cv">重建离屏高行（复现 content-visibility 塌陷）</button>
+  <button id="t-reset">重置读数</button>
+  <div id="readout">就绪。</div>
+</div>
+
+<h2>① 列宽稳定性 —— 滚动 2000px 后，列宽是否一字未变</h2>
+<p class="note">
+  同一个表格、同一份数据。<strong>fixed</strong>（默认）：列宽来自 <code>&lt;colgroup&gt;</code>，滚动不改。
+  <strong>auto</strong>（对照组）：列宽由当前渲染行的内容推导，虚拟滚动每次换行集就重算 —— 数值会变。
+</p>
+<div id="s1" class="table-scroll" style="height:260px;border:1px solid var(--table-border);border-radius:8px"></div>
+<div id="r1" style="font-family:ui-monospace,Consolas,monospace;font-size:12px;white-space:pre-wrap;margin:6px 0 0"></div>
+
+<h2>② 数字列宽度 —— 数值变化时列宽是否稳定</h2>
+<p class="note">
+  数字每秒变化。<strong>tabular-nums</strong>（默认）下等宽，列宽不动；
+  <code>normal</code>（对照组）下比例字形，<code>1</code> 与 <code>8</code> 宽度不同 —— 列宽会跳。
+</p>
+<table class="data-table" id="t2" style="border:1px solid var(--table-border);border-radius:8px">
+  <colgroup><col style="width:40%"><col style="width:30%"><col style="width:30%"></colgroup>
+  <thead><tr><th>项目</th><th class="num">金额</th><th class="num">数量</th></tr></thead>
+  <tbody><tr><td>示例行</td><td class="num" id="n1">—</td><td class="num" id="n2">—</td></tr></tbody>
+</table>
+<div id="r2" style="font-family:ui-monospace,Consolas,monospace;font-size:12px;white-space:pre-wrap;margin:6px 0 0"></div>
+
+<h2>③ <code>content-visibility</code> 的塌陷 —— 为什么它必须与虚拟滚动互斥</h2>
+<p class="note">
+  左侧<strong>不用</strong> <code>content-visibility</code>；右侧用它 + <code>contain-intrinsic-size: auto 36px</code>，
+  且中间有一行真实高度 <strong>200px</strong>。<br>
+  点上面「重建离屏高行」：<strong>右侧的 <code>scrollHeight</code> 会掉下去</strong>（DOM 重建丢掉"上次记住的尺寸"，
+  退回写死的 36px → 行高塌陷 → 滚动条缩短 → 浏览器强制 clamp <code>scrollTop</code>，就是滚动跳回）。
+  左侧不变。这解释了为什么虚拟滚动场景下<strong>不该</strong>再叠它。
+</p>
+<div style="display:flex;gap:12px;flex-wrap:wrap">
+  <div style="flex:1;min-width:280px">
+    <div style="font-size:12px;margin-bottom:4px">A：无 content-visibility</div>
+    <div id="s3a" class="table-scroll" style="height:220px;border:1px solid var(--table-border);border-radius:8px"></div>
+  </div>
+  <div style="flex:1;min-width:280px">
+    <div style="font-size:12px;margin-bottom:4px">B：有 content-visibility + 固定 intrinsic size</div>
+    <div id="s3b" class="table-scroll cv-on" style="height:220px;border:1px solid var(--table-border);border-radius:8px"></div>
+  </div>
+</div>
+<div id="r3" style="font-family:ui-monospace,Consolas,monospace;font-size:12px;white-space:pre-wrap;margin:6px 0 0"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  var ROW_H = 36, OVERSCAN = 4, ROWS = 5000;
+  var cols = [
+    { title: 'ID', width: '80px' },
+    { title: '名称', width: '38%' },
+    { title: '状态', width: '120px' },
+    { title: '节点', width: '22%' },
+    { title: '数量', width: '96px', num: true }
+  ];
+
+  function pad(n, w) { var s = String(n); while (s.length < w) s = '0' + s; return s; }
+
+  // 宽度刻意参差：auto layout 才会有明显抖动
+  function makeRows(count) {
+    var out = new Array(count);
+    for (var i = 0; i < count; i++) {
+      out[i] = {
+        id: pad(i + 1, 5),
+        name: ['a', 'medium-name', 'a-considerably-longer-resource-name', 'svc'][i % 4] + '-' + (i % 97),
+        status: ['Running', 'Pending', 'Succeeded', 'CrashLoopBackOff'][i % 4],
+        node: 'node-' + (i % 13) + '.internal.example',
+        count: String((i * 7919) % 100000)
+      };
+    }
+    return out;
+  }
+
+  function colgroup() {
+    var cg = document.createElement('colgroup');
+    cols.forEach(function (c) {
+      var col = document.createElement('col');
+      col.style.width = c.width;
+      cg.appendChild(col);
+    });
+    return cg;
+  }
+
+  function thead() {
+    var th = document.createElement('thead');
+    var tr = document.createElement('tr');
+    cols.forEach(function (c) {
+      var cell = document.createElement('th');
+      cell.scope = 'col';
+      cell.textContent = c.title;
+      if (c.num) cell.className = 'num';
+      tr.appendChild(cell);
+    });
+    th.appendChild(tr);
+    return th;
+  }
+
+  function rowEl(r, index) {
+    var tr = document.createElement('tr');
+    tr.dataset.index = String(index);
+    [r.id, r.name, r.status, r.node, r.count].forEach(function (v, i) {
+      var td = document.createElement('td');
+      td.textContent = v;
+      if (cols[i].num) td.className = 'num';
+      tr.appendChild(td);
+    });
+    return tr;
+  }
+
+  // ---------------------------------------------------------------- 虚拟表格
+  // 与 references/VirtualTable.tsx 同一套算法：固定行高 → 窗口算术只需几行。
+  function virtualTable(mount, rows) {
+    mount.innerHTML = '';
+
+    var head = document.createElement('table');
+    head.className = 'data-table';
+    head.appendChild(colgroup());
+    head.appendChild(thead());
+    mount.appendChild(head);
+
+    var spacer = document.createElement('div');
+    spacer.className = 'vspacer';
+    spacer.style.height = (rows.length * ROW_H) + 'px';
+
+    var body = document.createElement('table');
+    body.className = 'data-table vbody';
+    body.appendChild(colgroup());
+    var tbody = document.createElement('tbody');
+    body.appendChild(tbody);
+    spacer.appendChild(body);
+    mount.appendChild(spacer);
+
+    var state = { start: -1, end: -1, frame: 0 };
+
+    function render() {
+      var h = mount.clientHeight;
+      var top = mount.scrollTop;
+      var visible = Math.ceil(h / ROW_H) + OVERSCAN * 2;
+      var start = Math.max(0, Math.floor(top / ROW_H) - OVERSCAN);
+      var end = Math.min(rows.length, start + visible);
+      if (start === state.start && end === state.end) return;
+      state.start = start; state.end = end;
+      body.style.top = (start * ROW_H) + 'px';
+      var frag = document.createDocumentFragment();
+      for (var i = start; i < end; i++) frag.appendChild(rowEl(rows[i], i));
+      tbody.innerHTML = '';
+      tbody.appendChild(frag);
+    }
+
+    // 被动监听 + rAF 合帧，且不做任何布局读取
+    mount.addEventListener('scroll', function () {
+      if (state.frame) return;
+      state.frame = requestAnimationFrame(function () { state.frame = 0; render(); });
+    }, { passive: true });
+
+    render();
+    return { render: render, state: state };
+  }
+
+  function widths(mount) {
+    return Array.prototype.map.call(mount.querySelectorAll('thead th'), function (th) {
+      return th.getBoundingClientRect().width;
+    });
+  }
+
+  function same(a, b) {
+    if (a.length !== b.length) return false;
+    for (var i = 0; i < a.length; i++) if (Math.abs(a[i] - b[i]) > 0.5) return false;
+    return true;
+  }
+
+  function fmt(a) { return '[' + a.map(function (n) { return n.toFixed(0); }).join(', ') + ']'; }
+
+  function line(el, label, value, cls) {
+    var span = document.createElement('span');
+    if (cls) span.className = cls;
+    span.textContent = label + ' ' + value + '\n';
+    el.appendChild(span);
+  }
+
+  // ---------------------------------------------------------------- ① 列宽
+  var rows = makeRows(ROWS);
+  var s1 = document.getElementById('s1');
+  var t1 = virtualTable(s1, rows);
+  var before1 = widths(s1);
+  var r1 = document.getElementById('r1');
+
+  s1.addEventListener('scroll', function () {
+    if (s1._t) clearTimeout(s1._t);
+    s1._t = setTimeout(function () {
+      var after = widths(s1);
+      r1.textContent = '';
+      line(r1, '窗口行号        :', t1.state.start + ' – ' + t1.state.end);
+      line(r1, '滚动前列宽      :', fmt(before1));
+      line(r1, '滚动后列宽      :', fmt(after));
+      line(r1, '判定            :',
+        same(before1, after) ? '列宽一字未变' : '列宽已漂移（差值 ' + fmt(after.map(function (w, i) { return w - before1[i]; })) + '）',
+        same(before1, after) ? 'ok' : 'bad');
+      line(r1, '说明            :',
+        document.body.classList.contains('auto-layout')
+          ? '对照组 auto layout —— 漂移是预期结果'
+          : (same(before1, after) ? 'fixed layout 生效' : '异常：fixed 下不该漂移'),
+        same(before1, after) ? 'ok' : 'warn');
+    }, 120);
+  }, { passive: true });
+
+  // ---------------------------------------------------------------- ② 数字列
+  var n1 = document.getElementById('n1'), n2 = document.getElementById('n2');
+  var r2 = document.getElementById('r2');
+  // 注意：不能用 querySelectorAll('table.data-table')[n] —— ① 的虚拟表格自身就会创建
+  // 表头与表体两个 table，索引会错位。这里按 id 取，避免这个坑重演。
+  var t2 = document.getElementById('t2');
+  var numBefore = null, numMax = 0, numMin = 1e9;
+
+  setInterval(function () {
+    n1.textContent = String(Math.floor(Math.random() * 1e9));
+    n2.textContent = String(Math.floor(Math.random() * 1e6));
+    var w = t2.querySelectorAll('tbody td')[1].getBoundingClientRect().width;
+    numMax = Math.max(numMax, w); numMin = Math.min(numMin, w);
+    if (numBefore === null) numBefore = w;
+    r2.textContent = '';
+    line(r2, '金额列宽波动范围:', numMin.toFixed(1) + ' – ' + numMax.toFixed(1) + ' px');
+    line(r2, '判定            :',
+      (numMax - numMin) < 0.5 ? '数字变化时列宽稳定' : '列宽随数字跳动（振幅 ' + (numMax - numMin).toFixed(1) + 'px）',
+      (numMax - numMin) < 0.5 ? 'ok' : 'bad');
+    line(r2, '说明            :',
+      document.body.classList.contains('no-tabular')
+        ? '对照组 normal —— 跳动是预期结果'
+        : 'tabular-nums 生效');
+  }, 900);
+
+  // ---------------------------------------------------------------- ③ 塌陷
+  var s3a = document.getElementById('s3a'), s3b = document.getElementById('s3b');
+  var rowsA = makeRows(300), rowsB = makeRows(300);
+  var r3 = document.getElementById('r3');
+
+  // 两栏都是普通渲染（不虚拟化），中间第 50 行人为加高到 200px
+  function plainTable(mount, list, tallAt) {
+    mount.innerHTML = '';
+    var t = document.createElement('table');
+    t.className = 'data-table';
+    t.appendChild(colgroup());
+    t.appendChild(thead());
+    var tb = document.createElement('tbody');
+    list.forEach(function (r, i) {
+      var tr = rowEl(r, i);
+      if (i === tallAt) tr.className = 'tall-row';
+      tb.appendChild(tr);
+    });
+    t.appendChild(tb);
+    mount.appendChild(t);
+    return t;
+  }
+
+  var TALL_AT = 50;
+  plainTable(s3a, rowsA, TALL_AT);
+  var tb = plainTable(s3b, rowsB, TALL_AT).querySelector('tbody');
+
+  function baseline() {
+    // 先把两栏都滚离那一行，让内容真正离屏
+    s3a.scrollTop = 0; s3b.scrollTop = 0;
+    return { a: s3a.scrollHeight, b: s3b.scrollHeight };
+  }
+
+  function report3(after, tag) {
+    r3.textContent = '';
+    line(r3, '预期总高        :', (300 * ROW_H + 164) + ' px（299 行 × 36 + 1 行 × 200）');
+    line(r3, 'A 无 cv         :', after.a + ' px', Math.abs(after.a - (300 * ROW_H + 164)) < 2 ? 'ok' : 'bad');
+    line(r3, 'B 有 cv         :', after.b + ' px', Math.abs(after.b - (300 * ROW_H + 164)) < 2 ? 'ok' : 'bad');
+    if (tag === 'rebuilt') {
+      var collapsed = after.b < after.a - 2;
+      line(r3, '重建后 B 塌陷   :', collapsed ? ('是，少了 ' + (after.a - after.b) + ' px') : '否', collapsed ? 'bad' : 'ok');
+      line(r3, '结论            :',
+        collapsed
+          ? '已复现：DOM 重建丢掉尺寸记忆 → 退回 36px → scrollHeight 塌陷 → 浏览器 clamp scrollTop（滚动跳回）'
+          : '未复现塌陷（浏览器可能已把含高行的尺寸记进 IntrinsicSize；换真实虚拟滚动会更明显）',
+        collapsed ? 'warn' : 'ok');
+    }
+  }
+
+  var base3 = baseline();
+  report3(base3, 'baseline');
+
+  document.getElementById('t-cv').addEventListener('click', function () {
+    // 重建那一行：移除 + 重新插入。这正是虚拟化 wipe-and-rebuild 做的事。
+    var tr = tb.children[TALL_AT];
+    tb.removeChild(tr);
+    tb.insertBefore(tr, tb.children[TALL_AT] || null);
+    report3({ a: s3a.scrollHeight, b: s3b.scrollHeight }, 'rebuilt');
+  });
+
+  // ---------------------------------------------------------------- 开关
+  document.getElementById('t-auto').addEventListener('click', function () {
+    var on = document.body.classList.toggle('auto-layout');
+    this.setAttribute('aria-pressed', String(on));
+    s1.scrollTop = 0; before1 = widths(s1); t1.render();
+  });
+  document.getElementById('t-tabular').addEventListener('click', function () {
+    var on = document.body.classList.toggle('no-tabular');
+    this.setAttribute('aria-pressed', String(on));
+    numMax = 0; numMin = 1e9; numBefore = null;
+  });
+  document.getElementById('t-reset').addEventListener('click', function () {
+    s1.scrollTop = 0; before1 = widths(s1); t1.render();
+    r1.textContent = ''; r3.textContent = '';
+    numMax = 0; numMin = 1e9; numBefore = null;
+    report3(baseline(), 'baseline');
+  });
+
+  document.getElementById('readout').textContent =
+    '就绪：' + ROWS + ' 行 × ' + cols.length + ' 列，固定行高 ' + ROW_H + 'px，overscan ' + OVERSCAN + '。\n' +
+    '在 ① 里滚动表格，读数会自动出现在它下方。';
+})();
+</script>
+</body>
+</html>
