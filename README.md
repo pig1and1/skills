@@ -51,6 +51,7 @@
 | `VirtualTable.tsx` | React 固定行高虚拟表格骨架，无第三方依赖 |
 | `LineChart.ts` | Canvas 折线图骨架：DPR 正确、容器预留空间、resize 节流 |
 | `verify.html` | 自验证页面：滚动前后列宽快照、数字列宽度波动、`content-visibility` 塌陷复现，全部读数值并自动判定 |
+| `dashboard.html` | 复杂示例：brush 选择驱动多视图联动、hover 十字准线、序列切换、加载/空态、5000 行虚拟表格与图表共享同一处过滤状态 |
 
 ## 这些规则从哪来
 
