@@ -461,6 +461,53 @@ export function seriesHasGaps(points, options = {}) {
   return gapIndices(list.map((p) => p.t), options).length > 0
 }
 
+/**
+ * Are the samples evenly spaced in time?
+ *
+ * This decides whether a line chart should draw a marker at every point.
+ * Evenly spaced data gains nothing from markers -- the spacing carries no
+ * information, so dots are pure noise, and at a few hundred points they are
+ * overwhelming. Unevenly spaced data is the opposite: the reader has to see
+ * where the samples actually are, or the line silently implies a regularity
+ * that is not there.
+ *
+ * @param {Array<{t:number}>} points already sorted
+ * @param {number} [tolerance=0.15] relative deviation still counted as "even"
+ * @param {number} [minShare=0.9] share of gaps that must sit inside tolerance
+ */
+export function intervalsAreEven(points, { tolerance = 0.15, minShare = 0.9 } = {}) {
+  const list = Array.isArray(points) ? points : []
+  if (list.length < 4) return true       // too few points for spacing to read as a pattern
+  const deltas = []
+  for (let i = 1; i < list.length; i++) {
+    if (!isNum(list[i].t) || !isNum(list[i - 1].t)) return false
+    deltas.push(list[i].t - list[i - 1].t)
+  }
+  const sorted = deltas.slice().sort((a, b) => a - b)
+  const median = sorted[sorted.length >> 1]
+  if (!(median > 0)) return false        // all at one timestamp: nothing to be even about
+  const inside = deltas.filter((d) => Math.abs(d - median) <= median * tolerance).length
+  return inside / deltas.length >= minShare
+}
+
+/**
+ * Should this series draw a marker at every point?
+ *
+ * Two separate reasons to show where the samples are, and they are not the same
+ * thing:
+ *   - spacing is irregular (the gaps between samples carry information), or
+ *   - there is a hole (the line would otherwise run across missing data).
+ *
+ * A single hole does NOT make the spacing irregular -- every other interval can
+ * still be identical -- so testing regularity alone would miss it.
+ */
+export function wantsPointMarkers(points, { few = 20, tolerance = 0.15 } = {}) {
+  const list = Array.isArray(points) ? points : []
+  if (list.length <= few) return true
+  if (!intervalsAreEven(list, { tolerance })) return true
+  return gapIndices(list.map((p) => p.t)).length > 0
+}
+
 
 /**
  * Human-readable numbers.

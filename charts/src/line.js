@@ -15,7 +15,7 @@
  */
 import {
   isNum, num, linearScale, niceTicks, formatNumber, formatDate, plotArea,
-  prepareSeries, gapIndices, splitAt,
+  prepareSeries, gapIndices, splitAt, wantsPointMarkers,
   esc, px, linePath, areaPath,
 } from './core.js'
 
@@ -143,12 +143,20 @@ export function lineChart(host, options = {}) {
         `stroke="${t === 0 ? 'var(--chart-axis)' : 'var(--chart-grid)'}" stroke-width="1"/>`
     }
 
-    // selection / hover band sits under the data
+    // Hover feedback on a LINE chart is a thin vertical guide -- not a filled
+    // column. A column is the bar chart's idiom: it implies the slot is the unit
+    // of data, and it covers the very shape the reader came to see. Selection
+    // keeps a faint band because it is meant to persist and to anchor the eye.
     const mark = state.selected !== null ? state.selected : state.hover
     if (mark !== null && screen[mark]) {
       const x = screen[mark].x
-      out += `<rect x="${px(x - 9)}" y="${area.y}" width="18" height="${area.height}" rx="5" ` +
-        `fill="${state.selected !== null ? 'var(--chart-selected)' : 'var(--chart-hover)'}"/>`
+      if (state.selected !== null) {
+        out += `<rect x="${px(x - 9)}" y="${area.y}" width="18" height="${area.height}" rx="5" ` +
+          `fill="var(--chart-selected)"/>`
+      } else {
+        out += `<line x1="${px(x)}" y1="${area.y}" x2="${px(x)}" y2="${px(area.y + area.height)}" ` +
+          `stroke="var(--chart-guide)" stroke-width="1" stroke-dasharray="3 3"/>`
+      }
     }
 
     // area + line, per segment so gaps stay gaps
@@ -162,13 +170,23 @@ export function lineChart(host, options = {}) {
           `stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`
       }
     }
-    // A lone point still gets a mark, so a single-sample series is visible.
-    if (state.showPoints !== false) {
-      for (const s of screen) {
-        const isMark = state.selected === screen.indexOf(s)
-        out += `<circle cx="${px(s.x)}" cy="${px(s.y)}" r="${isMark ? 4.6 : 2.9}" fill="${color}" ` +
-          `stroke="var(--chart-surface)" stroke-width="${isMark ? 2.4 : 1.4}"/>`
+    // Markers only when the spacing is irregular (or the series is short).
+    // Drawing a dot per point on evenly spaced data is noise; see core.
+    const markers = state.showPoints === true ? true
+      : state.showPoints === false ? false
+        : wantsPointMarkers(pts)
+    if (markers) {
+      for (let i = 0; i < screen.length; i++) {
+        const s = screen[i]
+        const isMark = state.selected === i
+        out += `<circle cx="${px(s.x)}" cy="${px(s.y)}" r="${isMark ? 4.6 : 2.6}" fill="${color}" ` +
+          `stroke="var(--chart-surface)" stroke-width="${isMark ? 2.4 : 1.2}"/>`
       }
+    } else if (state.selected !== null && screen[state.selected]) {
+      // Even when markers are off, the selected point still needs to be visible.
+      const s = screen[state.selected]
+      out += `<circle cx="${px(s.x)}" cy="${px(s.y)}" r="4.6" fill="${color}" ` +
+        `stroke="var(--chart-surface)" stroke-width="2.4"/>`
     }
 
     // hit layer: the whole plot, so hovering anywhere gives a reading

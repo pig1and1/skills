@@ -15,6 +15,7 @@ import {
   isNum, num, linearScale, niceTicks, zeroBasedDomain, robustDomain,
   sanitize, sortedBy, collapseBy,
   stack, histogram, boxStats, movingAverage, gapIndices, splitAt, downsample,
+  intervalsAreEven, wantsPointMarkers,
   formatNumber, formatDate, bandScale, plotArea,
   esc, px, barSegmentPath, linePath, areaPath,
 } from '../src/core.js'
@@ -350,4 +351,54 @@ test('isNum and num behave for the values that actually show up', () => {
   assert.equal(isNum('5'), false)
   assert.equal(num(undefined, 7), 7)
   assert.equal(num(Infinity, 7), 7)
+})
+
+// ─────────────────────────────────────────────── marker policy
+
+test('intervalsAreEven tells regular sampling from patchy sampling', () => {
+  const H = 36e5
+  const even = Array.from({ length: 100 }, (_, i) => ({ t: i * H, value: i }))
+  assert.equal(intervalsAreEven(even), true)
+
+  // Irregular spacing: the gaps themselves vary, so spacing carries information.
+  const jittered = Array.from({ length: 100 }, (_, i) => ({ t: i * H + (i % 3) * H * 0.5, value: i }))
+  assert.equal(intervalsAreEven(jittered), false)
+
+  // A single hole does NOT make the spacing irregular -- every other interval is
+  // still identical. This is why wantsPointMarkers checks holes separately.
+  const oneHole = even.map((p) => (p.t > 50 * H ? { ...p, t: p.t + 5 * 864e5 } : p))
+  assert.equal(intervalsAreEven(oneHole), true, 'a lone hole leaves the rhythm intact')
+
+  // Too few points for spacing to read as a pattern.
+  assert.equal(intervalsAreEven([{ t: 0 }, { t: 1 }]), true)
+  // All at one timestamp: nothing can be "even" about that.
+  assert.equal(intervalsAreEven(Array.from({ length: 10 }, () => ({ t: 5 }))), false)
+  // Garbage timestamps must not claim regularity.
+  assert.equal(intervalsAreEven([{ t: 0 }, { t: NaN }, { t: 3 }, { t: 4 }]), false)
+})
+
+test('wantsPointMarkers follows the design rule, not a fixed default', () => {
+  const H = 36e5
+  // Few points: markers read as emphasis, not noise.
+  assert.equal(wantsPointMarkers(Array.from({ length: 10 }, (_, i) => ({ t: i * H }))), true)
+
+  // Many evenly spaced points: markers are pure noise.
+  assert.equal(wantsPointMarkers(Array.from({ length: 500 }, (_, i) => ({ t: i * H }))), false)
+
+  // Many unevenly spaced points: the reader has to see where the samples are.
+  // The jitter has to affect a real share of the gaps -- perturbing one gap in
+  // eleven leaves 10/11 = 0.91 inside tolerance, which is still "regular".
+  const jittered = Array.from({ length: 500 }, (_, i) => ({ t: i * H + (i % 3) * H * 0.4 }))
+  assert.equal(wantsPointMarkers(jittered), true)
+
+  // Even spacing BUT with a hole: the line would run across missing data, so the
+  // sampling positions still have to be visible. Regularity alone misses this.
+  const withHole = Array.from({ length: 500 }, (_, i) => ({
+    t: i * H + (i > 250 ? 10 * 864e5 : 0),
+  }))
+  assert.equal(wantsPointMarkers(withHole), true, 'a hole is its own reason to mark points')
+
+  // Empty and single-point inputs must not throw.
+  assert.equal(wantsPointMarkers([]), true)
+  assert.equal(wantsPointMarkers([{ t: 0 }]), true)
 })
