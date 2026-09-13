@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>USB 异常：堆叠柱 + 平均线</title>
+<style>
+  :root {
+    --bg:#fafbfc; --fg:#1c1e26; --muted:#6b7280; --card:#fff;
+    --line: color-mix(in srgb, currentColor 12%, transparent);
+    --grid: color-mix(in srgb, currentColor 9%, transparent);
+    --header-bg:#fff; --row-hover:#f5f6f8; --sel:#e8f0fe; --focus:#3b6cf6;
+    --c1:#4f7cf6; --c2:#e0684b; --c3:#c99a2e;
+    --avg:#14a3a3;
+    --pick: color-mix(in srgb, #4f7cf6 14%, transparent);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#101114; --fg:#e6e8ee; --muted:#9aa0b0; --card:#17181c;
+      --grid: color-mix(in srgb, currentColor 14%, transparent);
+      --header-bg:#17181c; --row-hover:#1f2126; --sel:#1d2b45; --focus:#6d92ff;
+      --c1:#6b93ff; --c2:#f07f63; --c3:#e0b44a;
+      --avg:#2dd4bf;
+      --pick: color-mix(in srgb, #6b93ff 18%, transparent);
+    }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:20px; background:var(--bg); color:var(--fg);
+         font:13px/1.6 ui-sans-serif, system-ui, "Segoe UI", sans-serif; }
+  h1 { font-size:18px; margin:0 0 3px; }
+  h2 { font-size:13px; margin:20px 0 8px; color:var(--muted); font-weight:550; }
+  .sub { color:var(--muted); margin:0 0 14px; max-width:92ch; }
+  code { background:color-mix(in srgb, currentColor 8%, transparent); padding:1px 5px; border-radius:4px; }
+
+  .toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+  button { font:inherit; padding:5px 11px; border:1px solid var(--line); border-radius:6px;
+           background:var(--card); color:inherit; cursor:pointer; }
+  button:hover { background:var(--row-hover); }
+  .hint { color:var(--muted); font-size:12px; }
+
+  /* 图例：可点击切换，因此用 button 而不是 span（键盘可达） */
+  .legend { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+  .legend button { display:inline-flex; align-items:center; gap:7px; padding:4px 10px; }
+  .legend button[aria-pressed="false"] { opacity:.42; }
+  .legend i { width:11px; height:11px; border-radius:3px; display:block; }
+  .legend i.line { height:3px; border-radius:2px; width:16px; }
+
+  /* 图表容器：高度预先固定，加载不会推挤页面 */
+  figure { margin:0 0 14px; background:var(--card); border:1px solid var(--line);
+           border-radius:10px; padding:12px 14px 8px; }
+  .chart-wrap { position:relative; height:280px; contain:layout paint; }
+  .chart-wrap svg { display:block; width:100%; height:100%; }
+  .ylabels { position:absolute; left:0; top:0; bottom:0; width:52px; pointer-events:none; }
+  .ylabels span { position:absolute; right:8px; transform:translateY(-50%); font-size:11px;
+                  color:var(--muted); font-variant-numeric:tabular-nums; }
+  .xlabels { display:flex; color:var(--muted); font-size:11px; padding-left:52px;
+             font-variant-numeric:tabular-nums; justify-content:space-between; }
+
+  .tip { position:absolute; pointer-events:none; z-index:6; display:none;
+         background:var(--card); border:1px solid var(--line); border-radius:8px;
+         padding:7px 10px; font-size:12px; box-shadow:0 5px 18px rgba(0,0,0,.16); white-space:nowrap; }
+  .tip b { font-variant-numeric:tabular-nums; }
+  .tip .row { display:flex; align-items:center; gap:7px; }
+  .tip .row i { width:9px; height:9px; border-radius:2px; }
+
+  /* 选中详情：点击后保持，不随鼠标离开消失 */
+  .detail { background:var(--card); border:1px solid var(--line); border-radius:10px;
+            padding:11px 14px; min-height:74px; }
+  .detail .t { font-weight:600; margin-bottom:6px; }
+  .detail .grid { display:flex; gap:18px; flex-wrap:wrap; }
+  .detail .cell .k { color:var(--muted); font-size:11px; }
+  .detail .cell .v { font-size:17px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .detail .swatch { display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:6px; }
+  .detail .ph { color:var(--muted); }
+
+  /* 图表的文字等价物 */
+  details { margin-top:16px; }
+  summary { cursor:pointer; color:var(--muted); font-size:12px; }
+  table.data { table-layout:fixed; width:100%; border-collapse:separate; border-spacing:0;
+               font-variant-numeric:tabular-nums; margin-top:8px;
+               background:var(--card); border:1px solid var(--line); border-radius:8px; }
+  .data th, .data td { height:32px; padding:0 11px; text-align:right; border:0;
+                       box-shadow:inset 0 -1px 0 var(--line); }
+  .data th:first-child, .data td:first-child { text-align:left; }
+  .data thead th { position:sticky; top:0; z-index:2; background:var(--header-bg);
+                   color:var(--muted); font-size:11px; font-weight:550;
+                   box-shadow:inset 0 -1px 0 var(--line); }
+</style>
+</head>
+<body>
+
+<h1>USB 异常：堆叠柱 + 平均线</h1>
+<p class="sub">
+  每根柱子是三段异常叠成的总数，柱间用<strong>同一量纲</strong>的折线连出平均段高 ——
+  所以两者共用一条<strong>从 0 起</strong>的轴。<strong>悬停</strong>看明细，<strong>点击</strong>选中并保持，
+  点空白或「清除选择」取消。图例可点击隐藏某一段。
+</p>
+
+<div class="legend" id="legend"></div>
+<div class="toolbar">
+  <button id="clear">清除选择</button>
+  <span class="hint" id="hint">点柱子试试</span>
+</div>
+
+<figure>
+  <div class="chart-wrap" id="chart">
+    <div class="tip" id="tip"></div>
+  </div>
+  <div class="xlabels" id="xlab"></div>
+</figure>
+
+<div class="detail" id="detail"><span class="ph">尚未选中。点击任意柱子查看当日明细。</span></div>
+
+<details>
+  <summary>数据表（图表的文字等价物）</summary>
+  <table class="data" id="tbl">
+    <thead><tr>
+      <th>日期</th><th id="th1">USB 断开</th><th id="th2">传输错误</th><th id="th3">供电欠压</th><th>合计</th><th>平均</th>
+    </tr></thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</details>
+
+<script>
+(function () {
+  'use strict';
+
+  // ============================================================ 数据
+  // 14 天 × 三类异常。刻意注入两段故障，让堆叠比例随时间变化。
+  var SERIES = [
+    { key: 'a', name: 'USB 断开', color: 'var(--c1)' },
+    { key: 'b', name: '传输错误', color: 'var(--c2)' },
+    { key: 'c', name: '供电欠压', color: 'var(--c3)' }
+  ];
+  var DAYS = 14;
+
+  function day0() { return Date.parse('2026-08-01T00:00:00Z'); }
+
+  function genData() {
+    var out = [];
+    for (var i = 0; i < DAYS; i++) {
+      // 基线：三类各自波动
+      var a = 6 + Math.round(Math.sin(i / 2) * 3 + 3);
+      var b = 4 + Math.round(Math.cos(i / 3) * 2 + 2);
+      var c = 2 + Math.round(Math.sin(i / 1.7) * 2 + 2);
+      // 故障 1（第 4–6 天）：断开为主
+      if (i >= 4 && i <= 6) { a += 22 - Math.abs(i - 5) * 5; b += 6; }
+      // 故障 2（第 10–12 天）：供电欠压为主
+      if (i >= 10 && i <= 12) { c += 20 - Math.abs(i - 11) * 5; b += 8; }
+      out.push({ i: i, t: day0() + i * 864e5, a: Math.max(0, a), b: Math.max(0, b), c: Math.max(0, c) });
+    }
+    return out;
+  }
+
+  // ============================================================ 状态
+  var RAW = genData();
+  var state = { hidden: {}, selected: null, hover: null };
+
+  var VISIBLE = function () {
+    return SERIES.filter(function (s) { return !state.hidden[s.key]; });
+  };
+
+  // 数值卫生 + 退化域（skill §9）：真实数据一定比示例脏
+  function safe(v) { return (typeof v === 'number' && isFinite(v) && v >= 0) ? v : 0; }
+
+  function totals() {
+    // 只看当前可见的段，否则隐藏一段后柱高不变，图例就失去意义
+    return RAW.map(function (r) {
+      var vis = VISIBLE();
+      var sum = 0;
+      vis.forEach(function (s) { sum += safe(r[s.key]); });
+      return {
+        i: r.i, t: r.t,
+        seg: vis.map(function (s) { return { key: s.key, v: safe(r[s.key]) }; }),
+        total: sum,
+        avg: vis.length ? sum / vis.length : 0          // 平均段高：与总同量纲，所以能共用一轴
+      };
+    });
+  }
+
+  // ============================================================ 绘图
+  var PAD_T = 14, PAD_B = 10, PLOT_LEFT = 52, BAR_GAP = 0.34;
+  var VB_W = 900, VB_H = 280;
+
+  function fmtDay(t) {
+    var d = new Date(t);
+    return (d.getUTCMonth() + 1) + '/' + d.getUTCDate();
+  }
+
+  function render() {
+    var data = totals();
+    var vis = VISIBLE();
+
+    // 域：堆叠柱的面积代表数量 → 必须从 0（skill §6）
+    var maxV = 0;
+    data.forEach(function (d) { if (d.total > maxV) maxV = d.total; });
+    data.forEach(function (d) { if (d.avg > maxV) maxV = d.avg; });
+    var hi = maxV > 0 ? maxV * 1.12 : 1;
+    var lo = 0;
+    // 退化域：全为 0 时 hi=1，绝不除零
+
+    var plotW = VB_W - PLOT_LEFT - 8;
+    var plotH = VB_H - PAD_T - PAD_B;
+    var slot = plotW / Math.max(1, data.length);
+    var barW = slot * (1 - BAR_GAP);
+
+    var X = function (i) { return PLOT_LEFT + slot * i + slot / 2; };
+    var Y = function (v) { return PAD_T + plotH - ((v - lo) / (hi - lo)) * plotH; };
+
+    var parts = [];
+
+    // 网格与刻度（三条，从 0 开始）
+    var ticks = [];
+    for (var g = 0; g <= 3; g++) {
+      var v = (hi * g) / 3;
+      var py = Math.round(Y(v)) + 0.5;
+      parts.push('<line x1="' + PLOT_LEFT + '" y1="' + py + '" x2="' + (VB_W - 8) + '" y2="' + py +
+        '" stroke="var(--grid)" stroke-width="1"/>');
+      ticks.push({ v: v, top: (py / VB_H) * 100 });
+    }
+
+    // 选中背景
+    if (state.selected !== null && data[state.selected]) {
+      var cx = PLOT_LEFT + slot * state.selected;
+      parts.push('<rect x="' + cx.toFixed(1) + '" y="0" width="' + slot.toFixed(1) +
+        '" height="' + VB_H + '" fill="var(--pick)"/>');
+    }
+
+    // 堆叠柱：从 0 起累积
+    data.forEach(function (d) {
+      var x = X(d.i) - barW / 2;
+      var acc = 0;
+      d.seg.forEach(function (seg) {
+        var y0 = Y(acc), y1 = Y(acc + seg.v);
+        var h = y0 - y1;
+        if (h > 0.4) {
+          parts.push('<rect data-i="' + d.i + '" data-key="' + seg.key + '" x="' + x.toFixed(1) +
+            '" y="' + y1.toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + h.toFixed(1) +
+            '" fill="' + colorOf(seg.key) + '" rx="1.5"/>');
+        }
+        acc += seg.v;
+      });
+      // 命中区：整根柱都可点，包括缝隙
+      parts.push('<rect data-i="' + d.i + '" x="' + (X(d.i) - slot / 2).toFixed(1) + '" y="0" width="' +
+        slot.toFixed(1) + '" height="' + VB_H + '" fill="transparent"/>');
+    });
+
+    // 折线：平均段高，画在柱心
+    if (vis.length) {
+      var pts = data.map(function (d) { return X(d.i).toFixed(1) + ' ' + Y(d.avg).toFixed(1); });
+      if (pts.length > 1) {
+        parts.push('<path d="M' + pts.join(' L') + '" fill="none" stroke="var(--avg)" ' +
+          'stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>');
+      }
+      // 数据点：点击折线点也要有反应
+      data.forEach(function (d) {
+        parts.push('<circle data-i="' + d.i + '" data-key="__avg" cx="' + X(d.i).toFixed(1) +
+          '" cy="' + Y(d.avg).toFixed(1) + '" r="' + (state.selected === d.i ? 5 : 3.4) +
+          '" fill="var(--avg)" stroke="var(--card)" stroke-width="1.5"/>');
+      });
+    }
+
+    // 悬停高亮
+    if (state.hover !== null && state.hover !== state.selected && data[state.hover]) {
+      parts.push('<rect x="' + (PLOT_LEFT + slot * state.hover).toFixed(1) + '" y="0" width="' +
+        slot.toFixed(1) + '" height="' + VB_H + '" fill="var(--row-hover)" opacity="0.75"/>');
+    }
+
+    var svg = document.getElementById('chart').querySelector('svg');
+    if (svg) svg.remove();
+    document.getElementById('chart').insertAdjacentHTML('afterbegin',
+      '<svg viewBox="0 0 ' + VB_W + ' ' + VB_H + '" preserveAspectRatio="none" role="img" ' +
+      'aria-label="' + ariaSummary(data) + '">' + parts.join('') + '</svg>' +
+      '<div class="ylabels">' + ticks.map(function (t) {
+        return '<span style="top:' + t.top.toFixed(2) + '%">' + t.v.toFixed(0) + '</span>';
+      }).join('') + '</div>');
+
+    document.getElementById('xlab').innerHTML =
+      data.length ? '<span>' + fmtDay(data[0].t) + '</span><span>' + fmtDay(data[data.length - 1].t) + '</span>' : '';
+
+    renderLegend();
+    renderDetail(data);
+    renderTable(data);
+    document.getElementById('hint').textContent = state.selected === null
+      ? '点柱子试试' : ('已选中 ' + fmtDay(data[state.selected].t));
+  }
+
+  function colorOf(key) {
+    for (var i = 0; i < SERIES.length; i++) if (SERIES[i].key === key) return SERIES[i].color;
+    return 'var(--muted)';
+  }
+
+  function ariaSummary(data) {
+    if (!data.length) return '无数据';
+    var best = data.reduce(function (a, b) { return b.total > a.total ? b : a; }, data[0]);
+    return '堆叠柱状图，' + data.length + ' 天，最高 ' + fmtDay(best.t) + ' 共 ' + best.total +
+      ' 次异常，橙色折线为平均段高';
+  }
+
+  // ============================================================ 图例（可切换）
+  function renderLegend() {
+    var html = SERIES.map(function (s) {
+      var on = !state.hidden[s.key];
+      return '<button data-legend="' + s.key + '" aria-pressed="' + on + '">' +
+        '<i style="background:' + s.color + '"></i>' + s.name + '</button>';
+    }).join('');
+    html += '<button data-legend="__all" aria-pressed="true"><i class="line" style="background:var(--avg)"></i>平均段高</button>';
+    document.getElementById('legend').innerHTML = html;
+  }
+
+  // ============================================================ 详情（点击后保持）
+  function renderDetail(data) {
+    var el = document.getElementById('detail');
+    if (state.selected === null || !data[state.selected]) {
+      el.innerHTML = '<span class="ph">尚未选中。点击任意柱子查看当日明细。</span>';
+      return;
+    }
+    var d = data[state.selected];
+    var cells = d.seg.map(function (seg) {
+      var s = null;
+      SERIES.forEach(function (x) { if (x.key === seg.key) s = x; });
+      return '<div class="cell"><div class="k"><span class="swatch" style="background:' + s.color + '"></span>' +
+        s.name + '</div><div class="v">' + seg.v + '</div></div>';
+    }).join('');
+    el.innerHTML =
+      '<div class="t">' + new Date(d.t).toISOString().slice(0, 10) + '（第 ' + (d.i + 1) + ' 天）</div>' +
+      '<div class="grid">' + cells +
+      '<div class="cell"><div class="k">合计</div><div class="v">' + d.total + '</div></div>' +
+      '<div class="cell"><div class="k"><span class="swatch" style="background:var(--avg)"></span>平均段高</div>' +
+      '<div class="v">' + d.avg.toFixed(1) + '</div></div></div>';
+  }
+
+  // ============================================================ 表格（文字等价物）
+  function renderTable(data) {
+    var vis = VISIBLE();
+    document.getElementById('th1').textContent = SERIES[0].name;
+    document.getElementById('th2').textContent = SERIES[1].name;
+    document.getElementById('th3').textContent = SERIES[2].name;
+    document.getElementById('tbody').innerHTML = data.map(function (d) {
+      var cells = ['a', 'b', 'c'].map(function (k) {
+        var s = null;
+        d.seg.forEach(function (x) { if (x.key === k) s = x; });
+        return '<td>' + (s ? s.v : '—') + '</td>';
+      }).join('');
+      var on = state.selected === d.i ? ' style="background:var(--sel)"' : '';
+      return '<tr' + on + '><td>' + fmtDay(d.t) + '</td>' + cells +
+        '<td>' + d.total + '</td><td>' + d.avg.toFixed(1) + '</td></tr>';
+    }).join('');
+  }
+
+  // ============================================================ 交互
+  function indexFromEvent(e) {
+    var svg = document.getElementById('chart').querySelector('svg');
+    if (!svg) return null;
+    var box = svg.getBoundingClientRect();
+    var plotW = VB_W - PLOT_LEFT - 8;
+    var slot = plotW / SITES();
+    var vx = ((e.clientX - box.left) / box.width) * VB_W;
+    var i = Math.floor((vx - PLOT_LEFT) / slot);
+    return (i < 0 || i >= SITES()) ? null : i;
+  }
+  function SITES() { return RAW.length; }
+
+  var chart = document.getElementById('chart');
+  var tip = document.getElementById('tip');
+
+  // 悬停：读数
+  chart.addEventListener('mousemove', function (e) {
+    var i = indexFromEvent(e);
+    if (i === null) { tip.style.display = 'none'; if (state.hover !== null) { state.hover = null; render(); } return; }
+    if (state.hover !== i) { state.hover = i; render(); }
+
+    var data = totals()[i];
+    var rows = data.seg.map(function (seg) {
+      var s = null;
+      SERIES.forEach(function (x) { if (x.key === seg.key) s = x; });
+      return '<div class="row"><i style="background:' + s.color + '"></i>' + s.name +
+        ' <b>' + seg.v + '</b></div>';
+    }).join('');
+    tip.innerHTML = '<div style="margin-bottom:4px">' + fmtDay(data.t) + '</div>' + rows +
+      '<div class="row" style="margin-top:4px"><i style="background:var(--avg)"></i>平均 <b>' +
+      data.avg.toFixed(1) + '</b>　合计 <b>' + data.total + '</b></div>';
+    tip.style.display = '';
+
+    var box = chart.getBoundingClientRect();
+    var svg = chart.querySelector('svg').getBoundingClientRect();
+    var px = ((PLOT_LEFT + (VB_W - PLOT_LEFT - 8) / SITES() * (i + 0.5)) / VB_W) * svg.width;
+    tip.style.left = Math.min(box.width - tip.offsetWidth - 8, px + 14).toFixed(0) + 'px';
+    tip.style.top = '8px';
+  });
+
+  chart.addEventListener('mouseleave', function () {
+    tip.style.display = 'none';
+    if (state.hover !== null) { state.hover = null; render(); }
+  });
+
+  // 点击：选中并保持（这正是「点击要有显示」——不随鼠标离开消失）
+  chart.addEventListener('click', function (e) {
+    var i = indexFromEvent(e);
+    if (i === null) { state.selected = null; }
+    else { state.selected = (state.selected === i) ? null : i; }
+    render();
+  });
+
+  document.getElementById('clear').addEventListener('click', function () {
+    state.selected = null; render();
+  });
+
+  // 图例切换：用事件委托，重绘后不必重新绑定
+  document.getElementById('legend').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-legend]');
+    if (!b) return;
+    var k = b.dataset.legend;
+    if (k === '__all') { state.hidden = {}; }          // 一键恢复全部
+    else {
+      state.hidden[k] = !state.hidden[k];
+      // 若全部隐藏，恢复全部，避免出现一张空图
+      if (SERIES.every(function (s) { return state.hidden[s.key]; })) state.hidden = {};
+    }
+    if (state.selected !== null && state.selected >= RAW.length) state.selected = null;
+    render();
+  });
+
+  // 表格行点击也联动
+  document.getElementById('tbody').addEventListener('click', function (e) {
+    var tr = e.target.closest('tr');
+    if (!tr) return;
+    var i = Array.prototype.indexOf.call(tr.parentNode.children, tr);
+    state.selected = (state.selected === i) ? null : i;
+    render();
+  });
+
+  // 键盘：左右移动选择，Esc 清除
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { state.selected = null; render(); return; }
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    var step = e.key === 'ArrowRight' ? 1 : -1;
+    if (state.selected === null) state.selected = step > 0 ? 0 : RAW.length - 1;
+    else state.selected = Math.max(0, Math.min(RAW.length - 1, state.selected + step));
+    render();
+    e.preventDefault();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
