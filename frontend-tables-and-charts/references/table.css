@@ -2,9 +2,13 @@
  *
  * Every block below names the failure it prevents -- those failures are the
  * reason the rules exist, not stylistic preference. Copy this, then replace the
- * token values with your palette. Row height (36px) is assumed in three places:
+ * token values with your palette. Row height (48px) is assumed in three places:
  * the td height, the intrinsic size, and the row-height prop of VirtualTable.
  * Change it in all three or scrolling will jump.
+ *
+ * 48px / 12px 16px / 14px is the "regular" density from the skill's density
+ * table (compact 32 / regular 48 / relaxed 56). For the compact density use
+ * 32px with 4px 12px padding and 13px text -- and change all three places.
  */
 
 /* ---- scroll container -------------------------------------------------- */
@@ -30,15 +34,16 @@ table.data-table {
   /* Equal-width digits. Without this, numeric columns visibly resize as values
    * change (proportional digits are not monospaced). */
   font-variant-numeric: tabular-nums;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .data-table th,
 .data-table td {
-  /* 36px row: the "regular" density from the skill. Keep in sync with the
-   * scroll math. */
-  height: 36px;
-  padding: 8px 12px;
+  /* 48px row, 12px/16px padding, 14px text: the "regular" density from the
+   * skill's density table (compact 32 / regular 48 / relaxed 56). Keep in sync
+   * with the scroll math. */
+  height: 48px;
+  padding: 12px 16px;
   box-sizing: border-box;
   text-align: left;
   /* No vertical rules anywhere: horizontal rhythm only. */
@@ -111,11 +116,11 @@ table.data-table {
  * known failure: rebuilding a row element discards the "last remembered size",
  * the row falls back to this intrinsic value, and if that value is smaller than
  * the real height the scroll height collapses and the scroller jumps.
- * The 36px below must equal the real row height. */
+ * The 48px below must equal the real row height. */
 /*
 .data-table tbody tr {
   content-visibility: auto;
-  contain-intrinsic-size: auto 36px;
+  contain-intrinsic-size: auto 48px;
 }
 */
 

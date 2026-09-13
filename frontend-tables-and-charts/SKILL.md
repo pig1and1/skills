@@ -311,6 +311,21 @@ export function render(host, rows, options = {}) {
 | **点击选中** | 点击切换选中态，与 hover 分成**两个独立样式**；再点/点空白/Esc 都能清除 | 见 §10 —— 它和悬停是两件事，少一件都像"点了没反应" |
 | **悬停高亮的形式** | **必须匹配图表类型**：柱状图用整列色块，**折线 / 散点用细的竖直引导线 + 放大的数据点** | ★ 在折线图上铺整列色块，等于用柱状图的语法讲折线图的故事：它暗示"列"才是数据单位，而且**盖住读者正要看的那个形状** |
 
+### 显示 tooltip 时最容易写错的一行
+
+tooltip 通常用 **CSS 类**隐藏。那么**显示**它时必须给一个**具体的值**：
+
+```js
+tip.style.display = 'block'   // 对
+tip.style.display = ''        // 错
+```
+
+`''` 只是**清掉内联样式**，元素随即回落到 CSS 的 `display: none` —— **tooltip 永远不会出现**。
+**隐藏用 CSS、显示用内联**是自相矛盾的：显示与隐藏必须由**同一层**控制（都用类，或都用内联）。
+
+这个坑的恶劣之处在于**它不可见**：页面没有任何异常，只是悬停没有反应，**截图也完全看不出来** ——
+必须真的把指针移上去才会发现。本项目的参考实现与示例页里，这一行**一共写错过 8 次**。
+
 **别把 fill 用的 token 当成高亮色。** 一个本来就是半透明的填充色，再叠 `opacity` 会更实、
 更重 —— 悬停需要的是一条**细线**（1px 虚线即可），不是一块**面**。面留给"钉住"，
 因为钉住本来就该持久、醒目、能当锚点。
@@ -485,16 +500,37 @@ export function render(host, rows, options = {}) {
 - [ ] 每个 `<th>` 都有 `scope="col"` 吗？—— `grep '<th' | grep -v 'scope='` 应当无输出
 - [ ] 悬停就能读到**全部字段**吗？（不必点击）
 - [ ] 所有视图都从**同一个**过滤状态派生吗？（各自过滤迟早不一致）
-- [ ] 用参照标准的 **Grep Signatures** 扫过一遍吗？
+- [ ] 用下面几条命令扫过一遍吗？**一条规则如果变不成一条命令，就等于检查不了。**
+      ```sh
+      grep -n '<text' x.html                        # 文字不许画进会被横向拉伸的 SVG
+      grep -n 'table-layout' x.html | grep -v fixed # 列宽必须由 <colgroup> 决定
+      grep -nE '#[0-9a-fA-F]{3,8}' src/*.js         # 代码里不许出现字面色值，只用 token
+      grep -n "display = ''" src/*.js               # tooltip 显示不能写空串（见 §8 那个坑）
+      ```
 - [ ] 深浅两套主题都验过吗？
 
 ## 参考实现（按需加载，是起点不是成品）
 
+**代码骨架**
+
 - `references/table.css` —— 样式基线，每段注明它防的是哪个故障，含深浅主题 token。
 - `references/VirtualTable.tsx` —— React 固定行高虚拟表格骨架，无依赖。
 - `references/LineChart.ts` —— Canvas 折线图骨架：DPR 正确、容器**预留空间**、`ResizeObserver` 节流。
+
+**可跑的成品示例**（照抄手法比照抄骨架快，代价是更长）
+
+- `references/stacked-bars-average-line.html` —— 复合图表：三段堆叠柱 + 同量纲平均折线共用从 0 起的轴；**整柱透明命中区**、柱顶圆角 path、点击选中并保持（区别于悬停）、图例全隐藏自动恢复。
+- `references/dashboard.html` —— 复杂示例：brush 选择驱动多视图联动、hover 十字准线、序列切换、加载/空态，5000 行虚拟表格与图表**共享同一处过滤状态**。
+- `references/dirty-data-cases.html` —— 脏数据对跑：9 个病态数据集，朴素实现 vs 加固实现，逐例给出诊断数值。
+
+**专题说明**
+
+- `references/visual-quality.md` —— 手艺层：同一份数据怎么画才不业余（网格与轴的层次、颜色数量、标签密度、强调色只留给"要说的那件事"）。
+- `references/chart-correctness.md` —— 正确性判据：轴是否从 0、对数轴何时用、双轴为什么撒谎、截断轴的代价、聚合口径（"平均"≠"求和"）。
+- `references/dirty-data.md` —— 脏数据处理对照：空洞、脏值、重复时间戳、乱序、恒定段、尖峰、极端量级、恶意标签，每类给出显示后果与处置。
+- `references/composite-charts.md` —— 复合图表：多量纲该拆图而不是加第二根轴；堆叠柱 + 折线的同量纲前提与命中区设计。
 - `references/verify.html` —— **自验证页面**：滚动前后列宽快照、数字列宽度波动、`content-visibility` 塌陷复现，全部读数值并自动判定。
-- `references/evidence.md` —— 每条规则对应的**真实故障记录**（GitHub issue / PR）与规范原文出处。想知道"这条规则为什么存在"，去那里。
+- `references/evidence.md` —— 每条规则对应的**真实故障记录**（GitHub issue / PR）与规范原文出处，以及验证过程本身的失误记录。
 
 参考实现均**未经真实项目运行验证**，是为你的项目改写的起点：替换 token、
 按真实列宽填 `<colgroup>`、把行高与 `contain-intrinsic-size` 对齐。

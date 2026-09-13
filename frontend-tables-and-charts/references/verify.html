@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<title>frontend-table-design — 规则自验证</title>
+<title>frontend-tables-and-charts — 规则自验证</title>
 <style>
   :root {
     --table-border: color-mix(in srgb, currentColor 12%, transparent);
@@ -57,10 +57,10 @@
     table-layout: fixed;            /* 规则 1：列宽由 <colgroup> 决定，绝不测量内容 */
     width: 100%; border-collapse: separate; border-spacing: 0;
     font-variant-numeric: tabular-nums;   /* 规则 2：等宽数字 */
-    font-size: 13px;
+    font-size: 14px;
   }
   .data-table th, .data-table td {
-    height: 36px; padding: 8px 12px; box-sizing: border-box;
+    height: 48px; padding: 12px 16px; box-sizing: border-box;
     text-align: left; border: 0; vertical-align: middle;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
@@ -80,7 +80,7 @@
   body.no-tabular table.data-table { font-variant-numeric: normal; } /* 关掉规则 2 */
 
   /* 规则 4 的可选优化：仅在「不虚拟滚动」时才该用，见第三块 */
-  .cv-on tbody tr { content-visibility: auto; contain-intrinsic-size: auto 36px; }
+  .cv-on tbody tr { content-visibility: auto; contain-intrinsic-size: auto 48px; }
 
   .tall-row td { height: 200px !important; }
 
@@ -91,7 +91,7 @@
 </head>
 <body>
 
-<h1>frontend-table-design — 规则自验证</h1>
+<h1>frontend-tables-and-charts — 规则自验证</h1>
 <p class="note">
   这个页面不靠肉眼判断，而是<strong>读数值</strong>：每块都记录滚动前后的列宽快照、或 <code>scrollHeight</code>，
   并在下方给出 <span class="ok">通过</span> / <span class="bad">失败</span> 判定。
@@ -128,10 +128,10 @@
 
 <h2>③ <code>content-visibility</code> 的塌陷 —— 为什么它必须与虚拟滚动互斥</h2>
 <p class="note">
-  左侧<strong>不用</strong> <code>content-visibility</code>；右侧用它 + <code>contain-intrinsic-size: auto 36px</code>，
+  左侧<strong>不用</strong> <code>content-visibility</code>；右侧用它 + <code>contain-intrinsic-size: auto 48px</code>，
   且中间有一行真实高度 <strong>200px</strong>。<br>
   点上面「重建离屏高行」：<strong>右侧的 <code>scrollHeight</code> 会掉下去</strong>（DOM 重建丢掉"上次记住的尺寸"，
-  退回写死的 36px → 行高塌陷 → 滚动条缩短 → 浏览器强制 clamp <code>scrollTop</code>，就是滚动跳回）。
+  退回写死的 48px → 行高塌陷 → 滚动条缩短 → 浏览器强制 clamp <code>scrollTop</code>，就是滚动跳回）。
   左侧不变。这解释了为什么虚拟滚动场景下<strong>不该</strong>再叠它。
 </p>
 <div style="display:flex;gap:12px;flex-wrap:wrap">
@@ -150,7 +150,7 @@
 (function () {
   'use strict';
 
-  var ROW_H = 36, OVERSCAN = 4, ROWS = 5000;
+  var ROW_H = 48, OVERSCAN = 4, ROWS = 5000;
   var cols = [
     { title: 'ID', width: '80px' },
     { title: '名称', width: '38%' },
@@ -369,7 +369,7 @@
 
   function report3(after, tag) {
     r3.textContent = '';
-    line(r3, '预期总高        :', (300 * ROW_H + 164) + ' px（299 行 × 36 + 1 行 × 200）');
+    line(r3, '预期总高        :', (300 * ROW_H + 164) + ' px（299 行 × 48 + 1 行 × 200）');
     line(r3, 'A 无 cv         :', after.a + ' px', Math.abs(after.a - (300 * ROW_H + 164)) < 2 ? 'ok' : 'bad');
     line(r3, 'B 有 cv         :', after.b + ' px', Math.abs(after.b - (300 * ROW_H + 164)) < 2 ? 'ok' : 'bad');
     if (tag === 'rebuilt') {
@@ -377,7 +377,7 @@
       line(r3, '重建后 B 塌陷   :', collapsed ? ('是，少了 ' + (after.a - after.b) + ' px') : '否', collapsed ? 'bad' : 'ok');
       line(r3, '结论            :',
         collapsed
-          ? '已复现：DOM 重建丢掉尺寸记忆 → 退回 36px → scrollHeight 塌陷 → 浏览器 clamp scrollTop（滚动跳回）'
+          ? '已复现：DOM 重建丢掉尺寸记忆 → 退回 48px → scrollHeight 塌陷 → 浏览器 clamp scrollTop（滚动跳回）'
           : '未复现塌陷（浏览器可能已把含高行的尺寸记进 IntrinsicSize；换真实虚拟滚动会更明显）',
         collapsed ? 'warn' : 'ok');
     }

@@ -1,6 +1,6 @@
 // Fixed-height virtualized table. No third-party dependencies: with a fixed row
 // height the window arithmetic is a few lines, and a fixed height is also what
-// keeps every other stability rule in `frontend-table-design` cheap.
+// keeps every other stability rule in `frontend-tables-and-charts` cheap.
 //
 // Pair with references/table.css. Column widths live in the <colgroup>, so the
 // browser never measures content to size a column -- that is what stops columns
@@ -11,7 +11,7 @@
 //
 // Row height appears in three places that must agree:
 //   - the `rowHeight` prop below
-//   - `height: 36px` in table.css
+//   - `height: 48px` in table.css
 //   - `contain-intrinsic-size` if you enable it there
 
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
@@ -38,7 +38,7 @@ interface Props<T> {
 function VirtualTableInner<T>({
   rows,
   columns,
-  rowHeight = 36,
+  rowHeight = 48,
   height = 480,
   overscan = 4,
   rowKey,
