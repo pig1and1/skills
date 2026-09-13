@@ -20,6 +20,8 @@ node serve.js    # 打开 http://127.0.0.1:4173/complex-test.html
 | 敌意数据 | `tests/complex.test.js` | 造出来的九类脏数据：空洞、脏值、重复时间戳、乱序、恒定段、尖峰、极端量级、恶意标签 |
 | 流水线 | `tests/pipeline.test.js` | `prepareSeries` 的完整链路与选项语义 |
 | 选项矩阵 | `tests/options.test.js` | `zeroBased` × `robust` × `floor` × `maxPoints` 的交叉 |
+| 未声明 token | `tests/tokens.test.js` | 渲染层引用了 theme.css 里**不存在**的 token（又一个静默失败） |
+| **真实浏览器** | `browser-check.mjs` + `renderers.html` | 六种渲染层的实际渲染、**hover 是否真的显示 tooltip**、`select()`/`update()`、双主题 |
 
 **还有一层不写在测试里**：`complex-test.html` 是浏览器端自检页，把同一批数据渲染出来并
 显示实际读数 —— **纯函数覆盖不到的渲染路径，靠它确认**。
@@ -181,12 +183,30 @@ heatmapChart(el, {
 
 ## 已知局限
 
-- **渲染层只有部分自动化测试**。六种图表的**计算**都在 `core.js`（或模块内的具名纯函数）里，
-  被直接单测；但**像素位置、CSS 层叠、DPR、真实 `ResizeObserver` 时序**没有回归保护 ——
-  `tests/scatter.test.js` 起手写了 DOM 桩，但只能覆盖调用约定，覆盖不到真实布局。
-  `complex-test.html` 是浏览器端的补充自检。
+- **浏览器验证只覆盖到"有没有、显不显示"**。`browser-check.mjs` 会验证六种渲染层真的画出了图元、
+  悬停真的让 tooltip 出现（读 `getComputedStyle`，这是截图做不到的）、`select()`/`update()` 不抛错、
+  双主题下悬停仍然工作。但它**不检查像素位置是否正确**——`devicePixelRatio`、真实滚动行为、
+  真机触摸与拖拽都没有回归保护。
 - **没有 TypeScript 类型**，也没有发布流程（没有 `dist/`、没有版本策略）。
 - `preserveAspectRatio="none"` 意味着绘图区按容器宽度横向缩放。因此**所有文字都必须放在
   HTML 覆盖层里**，不能画进 SVG，否则会被拉伸变形——这是约定，不是可选项。
+  （`browser-check.mjs` 会断言 `<svg>` 里没有任何 `<text>`。）
 - **堆叠柱不适合表达"极小占比"**：占比低于 1% 的段在屏幕上不足 1px，既点不中也看不见。
   要看占比就画独立的占比图，不要把段塞进堆叠柱。
+
+## 在真实浏览器里验证
+
+```sh
+node serve.js 4173     # 一个终端
+node browser-check.mjs # 另一个终端；SHOTS=1 会额外存两张截图
+```
+
+用 CDP 驱动 headless Edge，**零依赖**（只用 Node 22+ 的全局 `fetch` 和 `WebSocket`）。
+为什么不省掉这一层：单测覆盖不到像素、CSS 层叠和真实事件，而本包最要命的一个缺陷恰好
+只在那里可见——tooltip 用 `style.display = ''` 去显示，而 `.chart-tip` 在 CSS 里是
+`display: none`，于是它回落到 `none`，**tooltip 永远不出现**。页面不报错，看起来正常，
+**截图也看不出来**：只有 `getComputedStyle` 能发现。
+
+这个检查器自己也做过证伪：把 `line.js` 的 `'block'` 改回 `''` 后，它报出
+`line: hover reveals the tooltip — tooltip stayed display:none across 27 probe points`
+（68 → 63），其余五个渲染层不受影响。

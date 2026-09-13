@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>dsh-charts — 六种渲染层浏览器自检</title>
+<link rel="stylesheet" href="./src/theme.css">
+<style>
+  body { margin:0; padding:16px; background:var(--chart-bg); color:var(--chart-ink);
+         font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  h1 { font-size:15px; margin:0 0 4px; }
+  p.note { margin:0 0 14px; color:var(--chart-muted); font-size:12px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .card { border:1px solid var(--chart-hairline); border-radius:10px; padding:10px 12px;
+          background:var(--chart-surface); min-width:0; }
+  .card h2 { font-size:11px; margin:0 0 6px; color:var(--chart-muted);
+             font-weight:650; letter-spacing:.04em; text-transform:uppercase; }
+  .host { position:relative; min-width:0; }
+  @media (max-width:900px) { .grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+
+<h1>dsh-charts — 六种渲染层</h1>
+<p class="note">这一页只为浏览器内自检而存在：单测覆盖不到像素、CSS 层叠与真实事件。
+悬停读数是否真的出现，只有读 <code>getComputedStyle</code> 才知道。</p>
+
+<div class="grid">
+  <div class="card"><h2>line</h2><div class="host" id="c-line"></div></div>
+  <div class="card"><h2>bar + 平均线</h2><div class="host" id="c-bar"></div></div>
+  <div class="card"><h2>scatter</h2><div class="host" id="c-scatter"></div></div>
+  <div class="card"><h2>histogram</h2><div class="host" id="c-histogram"></div></div>
+  <div class="card"><h2>heatmap</h2><div class="host" id="c-heatmap"></div></div>
+  <div class="card"><h2>boxplot</h2><div class="host" id="c-boxplot"></div></div>
+</div>
+
+<script type="module">
+import { lineChart } from './src/line.js'
+import { barChart } from './src/bar.js'
+import { scatterChart } from './src/scatter.js'
+import { histogramChart } from './src/histogram.js'
+import { heatmapChart } from './src/heatmap.js'
+import { boxplotChart } from './src/boxplot.js'
+
+const DAY = 86400000
+const T0 = Date.parse('2026-05-01T00:00:00Z')
+
+// Deterministic PRNG so a failure is reproducible from the console alone.
+let _seed = 7
+const rnd = () => (_seed = (_seed * 1103515245) % 2147483647) / 2147483647
+
+// --- line: a real series with two holes -----------------------------------
+const linePoints = Array.from({ length: 60 }, (_, i) => ({
+  t: T0 + i * DAY,
+  value: (i === 17 || i === 38) ? NaN : 80 + Math.sin(i / 6) * 18 + (i % 7) * 3,
+}))
+
+// --- bar: three stacked series, plus an average line on the same axis ------
+const barRows = Array.from({ length: 14 }, (_, i) => ({
+  t: T0 + i * DAY,
+  a: 12 + (i * 7) % 23,
+  b: 5 + (i * 3) % 11,
+  c: 2 + (i * 5) % 7,
+}))
+
+// --- scatter: 600 points, deliberately overplotted ------------------------
+const scatterPoints = Array.from({ length: 600 }, () => {
+  const x = 20 + rnd() * 180
+  return { x, y: 0.4 + x / 300 + (rnd() - 0.5) * 0.5, label: 'GET /api/items' }
+})
+
+// --- histogram: bimodal, so the adaptive bin count has something to chew ---
+const histValues = Array.from({ length: 1500 }, () =>
+  Math.round((rnd() < 0.4 ? 30 + rnd() * 20 : 90 + rnd() * 40) * 10) / 10)
+
+// --- heatmap: 7 x 24 long-format records, with a real structural pattern ---
+const heatRows = []
+for (const [di, day] of ['一', '二', '三', '四', '五', '六', '日'].entries()) {
+  for (let hour = 0; hour < 24; hour++) {
+    heatRows.push({
+      day, hour,
+      errors: Math.round(Math.abs(Math.sin(hour / 3)) * (day === '六' ? 4 : 1) * 30),
+    })
+  }
+}
+
+// --- boxplot: three groups, first one carrying an outlier -----------------
+const boxGroups = ['周一', '周二', '周三'].map((label, gi) => ({
+  label,
+  values: Array.from({ length: 40 }, () => Math.round((100 + gi * 20 + (rnd() - 0.5) * 60) * 10) / 10)
+    .concat(gi === 0 ? [400] : []),
+}))
+
+const charts = {
+  line: lineChart(document.getElementById('c-line'), {
+    points: linePoints, height: 200, showArea: true, label: '健康分', formatY: (v) => v.toFixed(0),
+  }),
+  bar: barChart(document.getElementById('c-bar'), {
+    rows: barRows, height: 200, x: (r) => r.t,
+    series: [
+      { key: 'a', label: 'USB 断开', color: 'var(--chart-cat-3)' },
+      { key: 'b', label: '传输错误', color: 'var(--chart-cat-2)' },
+      { key: 'c', label: '供电欠压', color: 'var(--chart-cat-1)' },
+    ],
+    line: { read: (r) => (r.a + r.b + r.c) / 3, label: '平均' },
+  }),
+  scatter: scatterChart(document.getElementById('c-scatter'), {
+    points: scatterPoints, height: 200, xLabel: '耗时', xUnit: 'ms', label: '请求',
+  }),
+  histogram: histogramChart(document.getElementById('c-histogram'), {
+    values: histValues, height: 200, label: '响应时间',
+  }),
+  heatmap: heatmapChart(document.getElementById('c-heatmap'), {
+    rows: heatRows, height: 200,
+    row: (r) => r.day, col: (r) => r.hour, value: (r) => r.errors,
+  }),
+  boxplot: boxplotChart(document.getElementById('c-boxplot'), {
+    groups: boxGroups, height: 200, label: '耗时',
+  }),
+}
+
+// Exposed so the CDP driver can inspect what was actually mounted.
+window.__charts = charts
+window.__rendererIds = Object.keys(charts)
+window.__ready = true
+</script>
+</body>
+</html>
