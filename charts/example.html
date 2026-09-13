@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>dsh-charts 示例</title>
+<!-- 主题层：组件不认识具体颜色，只引用 token；换主题改这一个文件 -->
+<link rel="stylesheet" href="./src/theme.css">
+<style>
+  /* 仅页面布局。任何与图表观感有关的东西都在 theme.css 里。 */
+  * { box-sizing:border-box; }
+  body { margin:0; padding:40px 32px 56px; background:var(--chart-bg); color:var(--chart-ink-2);
+         font:13.5px/1.65 ui-sans-serif, system-ui, "Segoe UI", "Noto Sans SC", sans-serif; }
+  .page { max-width:1080px; margin:0 auto; }
+  h1 { font-size:19px; font-weight:640; color:var(--chart-ink); margin:0 0 6px; letter-spacing:-.005em; }
+  h2 { font-size:13px; font-weight:560; color:var(--chart-muted); margin:34px 0 10px; }
+  .sub { color:var(--chart-muted); font-size:12.5px; margin:0 0 24px; }
+  .card { background:var(--chart-surface); border:1px solid var(--chart-hairline);
+          border-radius:14px; padding:22px 24px 16px; }
+  .detail { margin-top:16px; padding:16px 24px; background:var(--chart-sunken);
+            border:1px solid var(--chart-hairline); border-radius:14px;
+            min-height:80px; font-size:13px; color:var(--chart-muted); }
+  .detail b { color:var(--chart-ink); font-size:17px; font-variant-numeric:tabular-nums; margin-right:4px; }
+  .detail .row { display:flex; gap:30px; flex-wrap:wrap; margin-top:8px; }
+  .detail .pinned { display:inline-block; margin-left:10px; font-size:11px; padding:1px 7px;
+                    border-radius:999px; background:var(--chart-selected); color:var(--chart-accent); }
+  .detail .muted { color:var(--chart-faint); font-size:11.5px; }
+  code { background:rgba(128,128,128,.12); padding:1px 5px; border-radius:4px; font-size:12px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>dsh-charts · 组件示例</h1>
+  <p class="sub">
+    这个页面只有 <code>~90 行脚本</code>，因为计算与渲染都在组件里。
+    对比：先前的单页演示是 700 行，数据、颜色、列宽全部硬编码。
+  </p>
+
+  <h2>折线图 —— 时间缺口断开 · 自适应 Y 域 · 悬停即出全部读数</h2>
+  <div class="card">
+    <div class="chart" id="line"></div>
+    <div class="chart-xlab" id="line-x"></div>
+  </div>
+  <div class="detail" id="line-detail">把鼠标移到图上任意位置，读数会出现在这里；点击只是把它钉住。</div>
+
+  <h2>堆叠柱 + 同量纲平均线 —— Y 轴强制从 0</h2>
+  <div class="card">
+    <div class="chart" id="bar" style="height:300px"></div>
+    <div class="legend">
+      <span><i style="background:var(--chart-cat-3)"></i>USB 断开</span>
+      <span><i style="background:var(--chart-cat-2)"></i>传输错误</span>
+      <span><i style="background:var(--chart-cat-1)"></i>供电欠压</span>
+      <span><i style="background:var(--chart-accent)"></i>平均段高（与柱同量纲）</span>
+    </div>
+  </div>
+  <div class="detail" id="bar-detail">鼠标移到任意柱子上，三段分项立刻出现在这里；点击把它钉住。</div>
+</div>
+
+<script type="module">
+import { lineChart } from './src/line.js'
+import { barChart } from './src/bar.js'
+
+// ── 详情面板：悬停就更新，点击只负责"钉住" ─────────────────
+// 组件本身不需要知道面板在哪 —— 它只回调 (row, index)，宿主决定显示方式。
+function makePanel(el, render, idleText) {
+  let pinned = null
+  return {
+    hover(row, index) {
+      if (pinned !== null) return                     // 钉住时不被悬停覆盖
+      el.innerHTML = row ? render(row, index) : idleText
+    },
+    pin(row, index) {
+      if (row === null) {
+        pinned = null
+        el.innerHTML = idleText
+      } else {
+        pinned = index
+        el.innerHTML = render(row, index) + '<span class="pinned">已钉住 · 再点一次取消</span>'
+      }
+    },
+    idle: idleText,
+  }
+}
+
+// ── 数据：故意做脏，验证组件自带的卫生处理 ─────────────────
+const T0 = Date.parse('2026-08-01T00:00:00Z')
+const H = 36e5, D = 864e5
+
+// 折线：中间留一段 3 天的空洞，并混入脏值
+const linePoints = []
+for (let i = 0; i < 240; i++) {
+  if (i >= 96 && i < 168) continue                 // ← 3 天没有采样
+  const t = T0 + i * H
+  let v = 90 + Math.sin(i / 14) * 5
+  if (i > 180) v -= 12                              // 后段劣化
+  if (i % 37 === 0) v = NaN                         // ← 脏值
+  linePoints.push({ t, value: v })
+}
+linePoints.push({ t: T0 + 50 * H, value: NaN })     // 重复时间戳 + 脏值
+linePoints.reverse()                                // ← 乱序输入，组件内部排序
+
+const linePanel = makePanel(
+  document.getElementById('line-detail'),
+  (p, i) => `健康分 <b>${p.value.toFixed(1)}</b>　${new Date(p.t).toISOString().slice(0, 16).replace('T', ' ')}` +
+    `　<span class="muted">第 ${i + 1} / ${line.data().points.length} 点 · 该点采样 ${p.n || 1} 次</span>`,
+  '把鼠标移到图上任意位置，读数会出现在这里；点击只是把它钉住。',
+)
+
+const line = lineChart(document.getElementById('line'), {
+  points: linePoints,
+  height: 260,
+  showArea: true,
+  label: '健康分',
+  // 悬停即读数 —— 不是点击才给
+  onHover: (p, i) => linePanel.hover(p, i),
+  onSelect: (p, i) => linePanel.pin(p, i),
+  onRender(info) {
+    document.getElementById('line-x').innerHTML =
+      `<span>${new Date(info.points[0].t).toISOString().slice(0, 10)}</span>` +
+      `<span>${new Date(info.points.at(-1).t).toISOString().slice(0, 10)}</span>`
+    if (info.rejected) console.info(`line: 剔除 ${info.rejected} 个非有限值`)
+    linePanel.hover(null, null)
+  },
+})
+
+// 柱：14 天 × 三类
+const barRows = []
+for (let i = 0; i < 14; i++) {
+  let a = 7 + Math.round(Math.sin(i / 2) * 3 + 3)
+  let b = 5 + Math.round(Math.cos(i / 3) * 2 + 2)
+  let c = 3 + Math.round(Math.sin(i / 1.7) * 2 + 2)
+  if (i >= 4 && i <= 6) { a += 21 - Math.abs(i - 5) * 5; b += 6 }
+  if (i >= 10 && i <= 12) { c += 19 - Math.abs(i - 11) * 5; b += 8 }
+  barRows.push({ t: T0 + i * D, a, b, c })
+}
+
+const barPanel = makePanel(
+  document.getElementById('bar-detail'),
+  (row) => `${new Date(row.t).toISOString().slice(0, 10)}` +
+    `<div class="row"><span>断开 <b>${row.a}</b></span><span>传输 <b>${row.b}</b></span>` +
+    `<span>欠压 <b>${row.c}</b></span><span>合计 <b>${row.a + row.b + row.c}</b></span>` +
+    `<span>平均 <b>${((row.a + row.b + row.c) / 3).toFixed(1)}</b></span></div>`,
+  '鼠标移到任意柱子上，三段分项立刻出现在这里；点击把它钉住。',
+)
+
+const bar = barChart(document.getElementById('bar'), {
+  rows: barRows,
+  x: (r) => r.t,
+  height: 300,
+  series: [
+    { key: 'a', label: 'USB 断开', color: 'var(--chart-cat-3)' },
+    { key: 'b', label: '传输错误', color: 'var(--chart-cat-2)' },
+    { key: 'c', label: '供电欠压', color: 'var(--chart-cat-1)' },
+  ],
+  // 同量纲：每根柱三段的平均段高。不同量纲必须拆图，不能加第二 Y 轴。
+  line: { read: (r) => (r.a + r.b + r.c) / 3, label: '平均' },
+  // 悬停即给全部字段；点击只是钉住，不是获取数据的前提
+  onHover: (row, i) => barPanel.hover(row, i),
+  onSelect: (row, i) => barPanel.pin(row, i),
+})
+</script>
+</body>
+</html>

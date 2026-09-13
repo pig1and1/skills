@@ -8,6 +8,153 @@ description: Use when building or restyling a frontend data table OR chart — c
 两者的难点是**同一个**：**别抖**。表格抖在列宽和滚动位置，图表抖在加载后的高度和重绘。
 剩下的（好看、简洁、快）都是收尾。不先把"不动"做到，怎么调样式都不对。
 
+---
+
+## 施工路径：接到任务后按这个顺序走
+
+下面十四节是**知识**；这一节是**做法**。不要从 §1 开始读着写，按这个顺序做。
+
+### 第 1 步 · 先问三个问题，别急着写代码
+
+| 问 | 答案决定 |
+|---|---|
+| **一次最多渲染多少行 / 多少点？** | §0 的整体方案（普通渲染 / 虚拟滚动 / 服务端） |
+| **要回答什么问题？** 精确值 / 趋势 / 比较 / 构成 / 分布 / 相关性 | §3 选表格还是图表、选哪种图 |
+| **数据从哪来，可能有多脏？** | §9 的防御强度；是否要报告被忽略的记录 |
+
+这三个问题**任何一个答不上来，就先问用户**，不要替他假设。假设错了，后面全白做。
+
+### 第 2 步 · 选型（§3 §4 §10）
+
+先定"表格还是图表"，再定具体类型，最后定技术：**点数 ≤ 1–2k 用内联 SVG，更多用 Canvas**。
+柱和线要同图？先确认它们**同量纲**（§10），不同量纲就拆图，不允许加第二 Y 轴。
+
+### 第 3 步 · 搭骨架，让数据先正确显示
+
+**先不管样式。** 顺序是：数据结构 → 计算（比例尺、刻度、堆叠、分箱）→ 渲染。
+
+- **把计算写成纯函数**：数字进、数字出，不碰 DOM。这样它可测，也就能真的被测。
+- **容器高度先固定**（§5），不要让内容撑开它。
+- 骨架见下面的「最小骨架」。
+
+### 第 4 步 · 逐条加固（§1 §6 §9）
+
+按这个优先级，因为它们造成的损害依次递减：
+
+1. **不误导**（§6）—— 柱状/面积从 0；折线可以自适应；不搞双轴、3D、超 5 类饼图。
+2. **不抖**（§1 §5）—— 列宽显式、行高固定、容器预留空间、网格淡而稳。
+3. **不崩**（§9）—— 脏值剔除并计数、时间排序、**缺口断开**、退化域不除零、超量降采样。
+
+### 第 5 步 · 加交互（§8 §10）
+
+**顺序不能反**：先让**悬停给出完整读数**，再决定要不要点击钉住、刷选、联动。
+判据是"什么都不点，能不能读到任意一点的**全部字段**"。
+
+### 第 6 步 · 最后做视觉（§11）
+
+排版层次 → 留白与对齐 → 配色主次 → 细节完成度。
+**放到最后**是因为前三步会改动尺寸和对齐；先做视觉等于白做两遍。
+
+### 第 7 步 · 自检（§12）
+
+逐条过。**三个必做**：真机滚动、喂脏数据、按最终显示尺寸看。
+
+### 第 8 步 · 交付时说清楚
+
+- 数据里哪些是**模拟**的；
+- **忽略了哪些记录**、为什么（§9 的计数要露出来）；
+- 哪些地方**没验证过**（例如"我没在 Safari 上试过 sticky"）。
+
+---
+
+## 最小骨架
+
+一个合格的图表，计算与渲染是分开的。这是最小形态：
+
+```js
+// 1) 计算：纯函数，可在 node 里单测，不碰 DOM
+export function prepare(rows, { max = 700 } = {}) {
+  const clean = rows.filter(r => Number.isFinite(r.value) && Number.isFinite(r.t))
+  const rejected = rows.length - clean.length
+  const sorted = clean.slice().sort((a, b) => a.t - b.t)
+  const points = sorted.length > max ? downsampleByTime(sorted, max) : sorted
+  const lo = Math.min(...points.map(p => p.value))
+  const hi = Math.max(...points.map(p => p.value))
+  const domain = hi - lo > 1e-9 ? [lo, hi] : [lo - 1, hi + 1]   // 退化域不除零
+  return { points, domain, rejected, sampled: points !== sorted }
+}
+
+// 2) 渲染：把数字放进 SVG，又薄又笨
+export function render(host, rows, options = {}) {
+  const { points, domain, rejected } = prepare(rows, options)
+  // 固定容器高度（§5）：先占好位置，加载不会推挤页面
+  host.style.height = `${options.height ?? 260}px`
+  // …比例尺、刻度、path…
+  if (rejected) console.info(`ignored ${rejected} unusable rows`)   // 丢数据要让人看见
+}
+```
+
+**检查它是否合格**：把 `prepare` 拿到 node 里跑一组脏数据（`NaN`、乱序、全同值、空数组），
+它应该**不抛异常**，并且告诉你丢了几个。做不到就说明计算还没抽干净。
+
+---
+
+## 参照标准：拿什么当尺子
+
+规则需要参照物。下面是**业界共识**，不是我的偏好。
+
+### 表格
+
+**规格基线** —— 一份从 **Carbon DataTable、Polaris DataTable、Atlassian DynamicTable、
+Ant Design Table、UUPM app-interface** 五个系统归纳出的 benchmark：
+
+> [Table (Data Table / Data Grid) — Benchmark Spec](https://cdn.jsdelivr.net/npm/@hegemonart/get-design-done@1.60.1/reference/components/table.md)
+
+它的可取之处不只是结论，还有**写法**：每条断言附来源、每个违规给出可 grep 的检测命令、
+每个反例说明**为什么失败**和**怎么修**。上面的尺寸表与无障碍契约直接取自它。
+
+**实际实现** —— [`openstatusHQ/data-table-filters`](https://github.com/openstatusHQ/data-table-filters)
+（2252★ · MIT · TypeScript）：shadcn/ui + TanStack Table，分面筛选、排序、无限滚动。
+判断"一个认真的表格长什么样"，看它的 issue/PR 记录比读代码更快 —— 例如它专门有一轮
+[`Refactor/shadcn neutral oklch theme`](https://github.com/openstatusHQ/data-table-filters/issues/102)。
+
+### 图表
+
+**选型** —— FT 的 [Chart Doctor](https://github.com/Financial-Times/chart-doctor)（3341★）。
+它的 *Visual Vocabulary* 用**九类关系**回答"什么数据用什么图"：
+deviation · correlation · ranking · distribution · change over time · part-to-whole ·
+magnitude · spatial · flow。
+**先判断数据属于哪一类，再选图形**，比凭喜好挑图可靠得多。
+
+**实现与配色** —— [`carbon-design-system/carbon-charts`](https://github.com/carbon-design-system/carbon-charts)
+（IBM · D3 + TypeScript）与 [Carbon 设计系统](https://github.com/carbon-design-system/carbon)（9457★）。
+Carbon 明确区分**分类色 / 顺序色 / 发散色**三种用途 —— **用错类型比选错颜色更糟**
+（给顺序数据配分类色，会暗示类别之间存在并不存在的等价关系）。
+
+**配色的硬约束：必须过色觉审计。** 真实项目的失败长这样：
+
+- [`askrjs/askr-charts` #30](https://github.com/askrjs/askr-charts/issues/30) —— 默认分类色里有一对
+  **相邻的红/绿**，红绿色盲无法区分；
+- [`crzyc98/planwise_navigator` #497](https://github.com/crzyc98/planwise_navigator/issues/497) ——
+  调色板**未通过色觉审计**，最后不得不维护两套。
+
+→ 所以 §11 才建议分类色用**同一色系的明度阶梯**：明度差异天生对色觉障碍友好，
+顺序还自带含义（浅→深 = 少→多）。
+
+### 怎么用它们
+
+1. **动手前**：表格查 Benchmark Spec 的 anatomy / states；图表查 Visual Vocabulary 的九类。
+2. **做完后**：用 Benchmark Spec 的 **Do / Don't** 与 **Grep Signatures** 自查 ——
+   它的检测命令是现成的（形如 `grep '<th' | grep -v 'scope='`）。
+3. **借判断，不借依赖**：openstatusHQ 是 React + shadcn，carbon-charts 是 D3。
+   它们值得学的是**决策**，不是它们引的包。
+
+---
+
+## 知识：十四节
+
+下面从 §0 开始是**规则与依据**。施工时按上面的顺序取用即可。
+
 ## 0. 表格：先定规模，再谈方案
 
 **先问：一次最多渲染多少行？** 过度工程和工程不足一样糟。
@@ -39,6 +186,13 @@ description: Use when building or restyling a frontend data table OR chart — c
 - **手动拖一下列宽就永久不再抖** → 病根一定是 `table-layout: auto`（拖拽把宽度固定了）。
 - **行数少时正常、超过某阈值才开始抖** → 同一处，阈值就是"开始虚拟化"的点。
 
+### 两条明令禁止（会伤到可访问性，不是风格问题）
+
+| 不要 | 为什么 |
+|---|---|
+| **不要给表格列宽做动画**（`transition: width`） | 每一帧都触发整表重排，是性能灾难；排序/hover 的过渡只动**背景色** |
+| **不要在 `<thead>/<tbody>/<tr>` 上用 `display: contents`** | 会破坏辅助技术的表格解析，屏幕阅读器读不出行列关系 |
+
 ### `content-visibility` 与虚拟滚动**互斥**
 
 两者都在解决渲染量，叠加零收益却引入上面那条塌陷。要虚拟滚动就别用它；不虚拟化时可用，
@@ -57,14 +211,40 @@ description: Use when building or restyling a frontend data table OR chart — c
 
 | 项 | 紧凑 | **常规（默认）** | 宽松 |
 |---|---|---|---|
-| 行高 | 32px | **36px** | 40px |
-| 单元格纵向 padding | 6px | **8px** | 10px |
-| 单元格横向 padding | 10px | **12px** | 16px |
+| 行高 | 32px | **48px** | 56px |
+| 单元格纵向 padding | 4px | **12px** | 16px |
+| 单元格横向 padding | 12px | **16px** | 20px |
+| 字号 | 13px | **14px** | 14px |
+
+> 这组数字不是估的：**Carbon、Polaris、Atlassian、Ant Design 四个系统在"默认 48px 行高、
+> 12/16px padding、13–14px 字号"上一致**。
+> **"紧凑"是给分析型仪表盘的特例，不是默认** —— 早先版本的 36px 行高 / 8px padding
+> 其实属于"很紧凑"，当默认用会让表格显得拥挤。
 
 "好看"几乎全部来自**一致的节奏**，不是任何单点装饰。
 
 **色彩走语义 token**（`--table-border` / `--table-header-bg` / `--table-row-hover` /
 `--table-row-selected` / `--table-focus`），深浅两套都要给。
+
+### 无障碍契约（几条硬性的）
+
+表格最容易在这里失分，因为它看起来"只是个表格"。以下来自 WAI-ARIA 与四家设计系统的一致要求：
+
+| 要求 | 为什么 |
+|---|---|
+| `<table>` 必须有 **`<caption>`** 或 `aria-label` | 屏幕阅读器靠它播报"这是什么表" |
+| 每个 `<th>` 都要 **`scope="col"`** | 缺了它 AT 无法按列导航 —— **最常被漏掉的一条** |
+| 可排序列要有 **`aria-sort="ascending\|descending\|none"`** | 只画一个箭头图标，辅助技术完全感知不到 |
+| 选中行要在 `<tr>` 上写 **`aria-selected="true"`** | 只用 CSS class 表示选中，AT 看不见 |
+| 横向滚动容器要有 **`tabindex="0"`** | 否则键盘用户根本无法横向滚这张表 |
+| 静态表格用 `role="table"`；**只有单元格可交互**才用 `role="grid"` | `grid` 会启用单元格级方向键导航，给只读表格加它反而添乱 |
+
+**键盘契约**（`role="grid"` 时，引自 [WAI-ARIA APG](https://www.w3.org/WAI/ARIA/apg/patterns/grid/)）：
+`←/→` 同行移动 · `↑/↓` 同列移动 · `Home`/`End` 行首行尾 · `Ctrl+Home`/`Ctrl+End` 表首表尾 ·
+`Enter`/`Space` 激活单元格内控件 · `Tab` 移出表格。
+
+**不要用 `<div>` 搭表格**，除非同时补齐 `role="table"` 与 `role="row"` / `role="columnheader"` /
+`role="cell"` —— 缺了它们，屏幕阅读器读不出任何行列关系。
 
 ## 3. 图表：先问它回答什么问题
 
@@ -146,7 +326,7 @@ description: Use when building or restyling a frontend data table OR chart — c
 
 | 交互 | 做法 | 坑 |
 |---|---|---|
-| **hover 读数** | 十字准线 + tooltip，在**数据点里找最近的一个**，不要按像素距离找 | tooltip 用绝对定位的 **HTML**，不要画进 SVG —— SVG 一旦非等比拉伸，里面的文字会横向变形；靠近右边缘时 tooltip 要翻转方向 |
+| **hover 读数** | 十字准线 + tooltip，在**数据点里找最近的一个**，不要按像素距离找 | ★ **悬停必须给出完整读数**，不能只给一个概览值 —— 见下面「悬停是获取数据的方式」；tooltip 用绝对定位的 **HTML**，不要画进 SVG（非等比拉伸会让里面的文字横向变形）；靠近右边缘时要翻转方向 |
 | **区间选择（brush）** | `mousedown` 记起点、`mousemove` 画选区、`mouseup` 应用 | **必须有最小宽度阈值**（如 <6px 视为点击而非选择），否则一次误点就把视图缩没了；**双击清除**是必须留的退路 |
 | **多视图联动** | 一个**派生函数**（如 `selected()`）产出过滤后的数据，所有视图都从它取 | 各视图各自过滤 = 迟早不一致。**一个状态，多处渲染** |
 | **序列切换** | 按钮 + `aria-pressed`，重绘 | 隐藏序列后 **Y 域要跟着重算**，否则图看起来像空的 |
@@ -226,10 +406,18 @@ description: Use when building or restyling a frontend data table OR chart — c
 **命中区**：堆叠出来的段可能只有 1–2 像素高，鼠标根本点不中。**给每根柱补一个覆盖整柱高度的
 透明命中矩形**，把事件挂在它上面，而不是挂在可见的段上。
 
-### 「点击」与「悬停」是两件事
+### 悬停是获取数据的方式，点击只是「钉住」
 
-- **悬停**：临时读数，移开就消失。
-- **点击**：**选中并保持**，直到再点一次、点空白或按 Esc。它才是"我要看这一条"的动作。
+★ **判据：什么都不点，能不能读到任意一个数据点的全部字段？** 能才算合格。
+
+这一条很容易做反：把"完整读数"只挂在点击上，等于给"看数据"加了一道门槛 —— 而看数据
+正是这个图表存在的理由。**悬停就该给出全部字段**（堆叠柱的三段分项、折线点的采样次数……），
+**点击只负责把它固定下来**，好让你移开鼠标去别处。
+
+- **悬停**：更新读数，移开还原。
+- **点击**：把当前读数**钉住**，此后的悬停不覆盖它，直到再点一次、点空白或按 Esc。
+
+实现上是件小事，顺序反了却会毁掉体验：**先保证悬停完整，再考虑钉住**。
 
 两者必须能**同时存在**：选中一根柱之后再悬停另一根，要能看出"悬停的是哪根、已选中的是哪根"，
 所以是**两个独立的样式**，不是同一个高亮。
@@ -357,7 +545,15 @@ description: Use when building or restyling a frontend data table OR chart — c
 - [ ] 数字有千分位、去掉了假精度吗？折线末端有直接标注吗？有来源行吗？
 - [ ] **按最终显示尺寸**（幻灯片 / 手机）看过吗？
 
+**无障碍（参照标准的硬性要求，逐条可查）**
+- [ ] `<table>` 有 `<caption>` 或 `aria-label` 吗？
+- [ ] 每个 `<th>` 都有 `scope="col"` 吗？（`grep '<th' | grep -v 'scope='` 应当无输出）
+- [ ] 可排序列有 `aria-sort` 吗？选中行在 `<tr>` 上有 `aria-selected="true"` 吗？
+- [ ] 横向滚动容器有 `tabindex="0"` 吗？键盘能走通整张表吗？
+- [ ] 没有给列宽做动画、没有在 `thead/tbody/tr` 上用 `display: contents` 吗？
+
 **共同**
+- [ ] 用参照标准的 **Grep Signatures** 扫过一遍吗？
 - [ ] 深浅两套主题都验过吗？
 - [ ] 1000 行级别滚动、或 >2k 点的图表，掉帧吗？（DevTools 实测，别猜）
 - [ ] 键盘能走通吗？

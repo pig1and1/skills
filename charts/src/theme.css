@@ -1,0 +1,215 @@
+/**
+ * Theme layer for dsh-charts.
+ *
+ * Components never name a colour. They reference tokens like
+ * `var(--chart-accent)`, so a host page restyles every chart by overriding
+ * tokens -- no component change, no per-chart overrides.
+ *
+ * The palette follows the skill's rule: muted context, one accent for the
+ * message. Categorical series use a single-hue lightness ramp rather than a
+ * rainbow, which is inherently colour-blind-safe (the series differ in
+ * lightness, not only in hue) and reads as ordered.
+ *
+ * Dark mode is NOT an inversion. It is re-picked: lower saturation, wider
+ * lightness spacing, so the ramp survives on a dark surface.
+ */
+
+:root {
+  /* surfaces & ink */
+  --chart-surface: #ffffff;
+  --chart-bg: #ffffff;
+  --chart-ink: #16181d;
+  --chart-ink-2: #3d434f;
+  --chart-muted: #767d8c;
+  --chart-faint: #a3a9b6;
+  --chart-hairline: rgba(22, 24, 29, 0.08);
+  --chart-sunken: #f7f8fa;
+
+  /* chart furniture -- deliberately faint: data > axis > grid */
+  --chart-grid: rgba(22, 24, 29, 0.055);
+  --chart-axis: rgba(22, 24, 29, 0.12);
+  --chart-hover: rgba(22, 24, 29, 0.035);
+  --chart-selected: rgba(194, 65, 12, 0.10);
+
+  /* the single accent: whatever carries the message */
+  --chart-accent: #c2410c;
+
+  /* categorical ramp: one hue, three lightnesses */
+  --chart-cat-1: #c9d2e6;
+  --chart-cat-2: #7b8ab5;
+  --chart-cat-3: #39466f;
+  --chart-cat-4: #232c49;
+  --chart-cat-5: #8ea2d8;
+  --chart-cat-6: #5a6a99;
+  --chart-cat-7: #aab5d0;
+  --chart-cat-8: #454f73;
+
+  /* semantic */
+  --chart-good: #15803d;
+  --chart-warn: #a16207;
+  --chart-bad: #b91c1c;
+  --chart-focus: #4f46e5;
+
+  /* table */
+  --table-border: color-mix(in srgb, currentColor 12%, transparent);
+  --table-header-bg: #ffffff;
+  --table-header-fg: #55596b;
+  --table-row-hover: #f5f6f8;
+  --table-row-selected: #e8f0fe;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --chart-surface: #15171c;
+    --chart-bg: #0e0f12;
+    --chart-ink: #f2f3f6;
+    --chart-ink-2: #c5c9d3;
+    --chart-muted: #8b91a0;
+    --chart-faint: #666d7c;
+    --chart-hairline: rgba(242, 243, 246, 0.10);
+    --chart-sunken: #101216;
+
+    --chart-grid: rgba(242, 243, 246, 0.055);
+    --chart-axis: rgba(242, 243, 246, 0.14);
+    --chart-hover: rgba(242, 243, 246, 0.045);
+    --chart-selected: rgba(251, 146, 60, 0.12);
+
+    --chart-accent: #fb923c;
+
+    --chart-cat-1: #2c3550;
+    --chart-cat-2: #4d5f92;
+    --chart-cat-3: #8ea2d8;
+    --chart-cat-4: #b9c6ea;
+    --chart-cat-5: #3d4a72;
+    --chart-cat-6: #6b7cae;
+    --chart-cat-7: #a3b1d6;
+    --chart-cat-8: #58648c;
+
+    --chart-good: #4ade80;
+    --chart-warn: #fbbf24;
+    --chart-bad: #f87171;
+    --chart-focus: #a5b4fc;
+
+    --table-border: rgba(242, 243, 246, 0.10);
+    --table-header-bg: #17181c;
+    --table-header-fg: #9aa0b0;
+    --table-row-hover: #1f2126;
+    --table-row-selected: #1d2b45;
+  }
+}
+
+/* ───────────────────────────────────────────── chart chrome */
+
+.chart {
+  position: relative;
+  /* Height is set by the component before data arrives, so loading a chart
+     never shifts the page. Do not remove this and let content size it. */
+  contain: layout paint;
+}
+
+.chart svg { display: block; width: 100%; height: 100%; }
+
+/* Axis labels live in HTML, never inside the SVG: the plot fills its box with
+   preserveAspectRatio="none", which would stretch any text drawn in there. */
+.chart-ylab {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 56px;
+  pointer-events: none;
+}
+.chart-ylab span {
+  position: absolute; right: 10px; transform: translateY(-50%);
+  font-size: 11px; color: var(--chart-faint);
+  font-variant-numeric: tabular-nums; letter-spacing: .01em; white-space: nowrap;
+}
+
+.chart-xlab {
+  display: flex; justify-content: space-between;
+  font-size: 11px; color: var(--chart-faint);
+  font-variant-numeric: tabular-nums;
+  padding-left: 56px; margin-top: 6px;
+}
+
+/* Direct label at the line end -- read faster than a legend lookup. */
+.chart-endlabel {
+  position: absolute; right: 4px; transform: translateY(-50%);
+  font-size: 11px; font-weight: 600; color: var(--chart-accent);
+  background: var(--chart-surface); padding: 1px 5px; border-radius: 5px;
+  pointer-events: none; white-space: nowrap;
+}
+
+/* ───────────────────────────────────────────── tooltip */
+
+.chart-tip {
+  position: absolute; z-index: 6; display: none; pointer-events: none;
+  background: var(--chart-surface);
+  border: 1px solid var(--chart-hairline);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 12px; color: var(--chart-ink-2);
+  /* A real shadow, not a bare box: the overlay has to read as floating. */
+  box-shadow: 0 8px 28px -6px rgba(10, 12, 20, .22), 0 2px 6px -2px rgba(10, 12, 20, .12);
+  white-space: nowrap;
+}
+.chart-tip-title { font-weight: 640; color: var(--chart-ink); margin-bottom: 5px; }
+.chart-tip-row { display: flex; align-items: center; gap: 8px; line-height: 1.9; }
+.chart-tip-row i { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+.chart-tip-row b {
+  margin-left: auto; padding-left: 16px;
+  font-variant-numeric: tabular-nums; color: var(--chart-ink);
+}
+
+/* ───────────────────────────────────────────── legend */
+
+.chart-legend {
+  display: flex; gap: 20px; flex-wrap: wrap;
+  margin-top: 16px; padding-top: 14px;
+  border-top: 1px solid var(--chart-hairline);
+}
+.chart-legend button {
+  display: inline-flex; align-items: center; gap: 8px;
+  font: inherit; font-size: 12px; color: var(--chart-ink-2);
+  background: none; border: 0; padding: 0; cursor: pointer;
+  transition: opacity .18s ease;
+}
+.chart-legend button[aria-pressed="false"] { opacity: .34; }
+.chart-legend i { width: 11px; height: 11px; border-radius: 3px; }
+.chart-legend i.line { width: 17px; height: 2.5px; border-radius: 2px; }
+
+/* ───────────────────────────────────────────── table */
+
+.chart-table {
+  table-layout: fixed; width: 100%;
+  border-collapse: separate; border-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  background: var(--chart-surface);
+  border: 1px solid var(--chart-hairline);
+  border-radius: 12px; overflow: hidden;
+}
+.chart-table th,
+.chart-table td {
+  height: 36px; padding: 0 14px; text-align: right; border: 0;
+  box-shadow: inset 0 -1px 0 var(--chart-hairline);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.chart-table th:first-child,
+.chart-table td:first-child { text-align: left; }
+.chart-table thead th {
+  position: sticky; top: 0; z-index: 2;
+  background: var(--table-header-bg); color: var(--table-header-fg);
+  font-size: 11px; font-weight: 560;
+}
+.chart-table tbody tr { transition: background .14s ease; }
+.chart-table tbody tr:hover { background: var(--table-row-hover); }
+.chart-table tbody tr[aria-selected="true"] { background: var(--table-row-selected); }
+
+/* Scroll container: stable gutter stops the table reflowing when the
+   scrollbar appears; the component draws rows only as needed. */
+.chart-scroll {
+  scrollbar-gutter: stable;
+  overflow: auto;
+  contain: layout paint;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chart-legend button,
+  .chart-table tbody tr { transition: none; }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "dsh-charts",
+  "version": "0.1.0",
+  "description": "Dependency-free SVG charts: pure, testable computation plus a thin renderer",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test",
+    "start": "node serve.js",
+    "check": "node --check src/core.js && node --check src/line.js && node --check src/bar.js && node --test"
+  },
+  "exports": {
+    ".": "./src/core.js",
+    "./line": "./src/line.js",
+    "./bar": "./src/bar.js",
+    "./scatter": "./src/scatter.js",
+    "./histogram": "./src/histogram.js",
+    "./heatmap": "./src/heatmap.js",
+    "./boxplot": "./src/boxplot.js",
+    "./theme.css": "./src/theme.css"
+  }
+}
