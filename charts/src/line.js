@@ -257,7 +257,9 @@ export function lineChart(host, options = {}) {
       const box = svg.getBoundingClientRect()
 
       tip.innerHTML = `<b>${esc(formatDate(p.t))}</b>　${esc((state.formatY || formatNumber)(p.value))}`
-      tip.style.display = ''
+      // 'block', not '': .chart-tip carries `display:none` in theme.css, so
+      // clearing the inline value falls back to none and the tip never appears.
+      tip.style.display = 'block'
       const left = (xs.scale(p.t) / host.clientWidth) * box.width
       tip.style.left = `${Math.max(8, Math.min(box.width - tip.offsetWidth - 8, left + 14))}px`
       tip.style.top = '4px'

@@ -620,3 +620,340 @@ export function areaPath(points, baseY) {
   if (pts.length < 2) return ''
   return linePath(pts) + `L${px(pts[pts.length - 1].x)} ${px(baseY)}L${px(pts[0].x)} ${px(baseY)}Z`
 }
+
+// ────────────────────────────────────────────────────────────── sequential colour scale
+
+/**
+ * The one scale the other charts did not need: an ORDERED ramp from a numeric
+ * domain to a bin index. A heatmap cannot be drawn without it.
+ *
+ * Everything here returns NUMBERS -- edges, indices, counts. None of it knows
+ * what colour bin 3 is. The renderer owns that mapping, which keeps theme.css
+ * the only place in the package where a colour exists, and it is why the
+ * binning can be tested without a browser.
+ *
+ * The decision with real consequences is equal-interval vs quantile bins, and it
+ * is not a matter of taste:
+ *
+ *   equal intervals  the legend's numbers are evenly spaced, so a reader can
+ *                    interpolate between them. Right when the values are spread
+ *                    fairly evenly across the domain.
+ *   quantile         each bin holds roughly the same NUMBER OF CELLS, so the
+ *                    ramp resolves the bulk of the data instead of the tail. The
+ *                    legend's numbers are then unevenly spaced -- which is
+ *                    visible rather than hidden, because the legend prints the
+ *                    real edges.
+ *
+ * One value at 1000 with a thousand values between 1 and 10: equal bins put
+ * 99.9% of the cells in bin 0 and the chart is a single flat colour; quantile
+ * bins put about 20% in each. So the choice is made by MEASURING what equal
+ * intervals would actually do (distributionShape reports the fullest equal bin)
+ * rather than by guessing from a skew number. colorBins() reports which method
+ * it used, why, and -- when quantile was chosen and did not help -- that it
+ * changed its mind.
+ */
+
+/** `n` evenly spaced edges spanning [lo, hi]. */
+function evenEdges(lo, hi, n) {
+  const out = []
+  for (let i = 0; i <= n; i++) out.push(lo + ((hi - lo) * i) / n)
+  return out
+}
+
+/** Strictly ascending edges: identical neighbours would mean an empty bin. */
+function dedupeEdges(list) {
+  const kept = []
+  for (const e of list) {
+    const v = Number(e)
+    if (!isNum(v)) continue
+    if (!kept.length || v > kept[kept.length - 1] + 1e-12) kept.push(v)
+  }
+  return { edges: kept, collapse: list.length - kept.length }
+}
+
+/** Population of each half-open bin, plus how many values fell outside the span. */
+function countBins(edges, values) {
+  const scale = stepScale(edges)
+  const size = Math.max(1, edges.length - 1)
+  const counts = new Array(size).fill(0)
+  let outside = 0
+  for (const v of values) {
+    if (v < edges[0] || v > edges[edges.length - 1]) outside += 1
+    counts[Math.min(size - 1, Math.max(0, scale.step(v)))] += 1
+  }
+  return { counts, outside }
+}
+
+/** Share of the values in the fullest bin -- the measure the choice is made on. */
+function maxShare(counts) {
+  const total = counts.reduce((a, b) => a + b, 0)
+  return total ? Math.max(...counts) / total : 0
+}
+
+/**
+ * Linear-interpolation quantile -- the same convention boxStats uses, so
+ * quantile(values, 0.25) equals boxStats(values).q1.
+ */
+export function quantile(values, q = 0.5) {
+  const clean = (Array.isArray(values) ? values : []).filter(isNum).slice().sort((a, b) => a - b)
+  if (!clean.length) return NaN
+  const qq = Math.min(1, Math.max(0, num(q, 0)))
+  const pos = (clean.length - 1) * qq
+  const base = Math.floor(pos)
+  const rest = pos - base
+  const next = clean[base + 1]
+  return next === undefined ? clean[base] : clean[base] + rest * (next - clean[base])
+}
+
+/**
+ * The distribution facts that decide how a ramp should be cut.
+ *
+ * `probeCounts` is the population of `probeBins` EQUAL-interval bins over the
+ * span. That is the measurement chooseBinMethod() reads: it is what equal bins
+ * would really do to this data, which is a far better predictor than any single
+ * skew statistic. (The IQR fence is still reported, because a caller showing
+ * "N outliers" is useful -- it just no longer decides the binning on its own.)
+ *
+ * `skew` is the quartile (Bowley) skewness, (q3 + q1 - 2*median) / iqr: 0 for a
+ * symmetric spread, positive when the tail runs high. One absurd outlier cannot
+ * decide it, unlike the moment skewness.
+ *
+ * @param {number[]} values
+ * @param {object} [options]
+ * @param {number} [options.probeBins=5] bin count the occupancy is measured at
+ * @param {[number,number]} [options.domain] measure inside a forced span
+ */
+export function distributionShape(values, options = {}) {
+  const clean = (Array.isArray(values) ? values : []).filter(isNum)
+  const probes = Math.max(1, Math.floor(num(options.probeBins, 5)))
+  if (!clean.length) {
+    return {
+      empty: true, count: 0, min: NaN, max: NaN,
+      q1: NaN, median: NaN, q3: NaN, iqr: 0,
+      skew: 0, outliers: 0, outlierShare: 0, distinct: 0,
+      probeBins: probes, probeCounts: new Array(probes).fill(0), probeMaxShare: 0,
+    }
+  }
+  const stats = boxStats(clean)                    // reuse: quartiles and the IQR fences
+  const sorted = clean.slice().sort((a, b) => a - b)
+  const skew = stats.iqr > 1e-12 ? (stats.q3 + stats.q1 - 2 * stats.median) / stats.iqr : 0
+
+  const given = Array.isArray(options.domain) && isNum(options.domain[0]) && isNum(options.domain[1])
+    ? [Math.min(options.domain[0], options.domain[1]), Math.max(options.domain[0], options.domain[1])]
+    : null
+  let lo = given ? given[0] : sorted[0]
+  let hi = given ? given[1] : sorted[sorted.length - 1]
+  // A degenerate span has to be expanded, exactly as colorBins does, or the
+  // probe would divide by zero and report a meaningless occupancy.
+  if (!(hi - lo > 1e-12)) {
+    const mid = (lo + hi) / 2
+    lo = mid - 0.5
+    hi = mid + 0.5
+  }
+  const probeCounts = countBins(evenEdges(lo, hi, probes), clean).counts
+
+  return {
+    empty: false,
+    count: stats.count,
+    // boxStats' own min/max are WHISKER ends -- they stop at the last inlier. A
+    // ramp must span the real extremes, or the winning outlier lands outside the
+    // scale and gets painted as if it were an ordinary low value.
+    min: sorted[0],
+    max: sorted[sorted.length - 1],
+    q1: stats.q1, median: stats.median, q3: stats.q3, iqr: stats.iqr,
+    skew,
+    outliers: stats.outliers.length,
+    outlierShare: stats.outliers.length / stats.count,
+    distinct: new Set(clean).size,
+    probeBins: probes,
+    probeCounts,
+    probeMaxShare: maxShare(probeCounts),
+  }
+}
+
+/**
+ * Equal-interval or quantile? Answered from the measured occupancy, with the
+ * reason attached.
+ *
+ * The default stays equal intervals whenever they are affordable, because evenly
+ * spaced legend numbers are easier to read and to interpolate. Quantile is
+ * chosen only when equal bins would visibly fail -- when the fullest equal bin
+ * would swallow more than `maxBinShare` of the cells, which is the same thing as
+ * saying most of the ramp would carry no information.
+ *
+ * @param {object} shape as returned by distributionShape()
+ * @param {object} [options]
+ * @param {number} [options.maxBinShare=0.5]
+ * @returns {{method:'equal'|'quantile', reason:string, detail:string}}
+ */
+export function chooseBinMethod(shape, options = {}) {
+  const limit = Math.min(1, Math.max(0.05, num(options.maxBinShare, 0.5)))
+  if (!shape || shape.empty) {
+    return { method: 'equal', reason: 'empty', detail: 'no usable values, so the ramp falls back to an even 0-1 span' }
+  }
+  if (!(shape.max - shape.min > 1e-12)) {
+    return { method: 'equal', reason: 'degenerate', detail: 'every value is identical, so the domain is expanded around it' }
+  }
+  if (shape.distinct <= 2) {
+    return {
+      method: 'equal', reason: 'discrete',
+      detail: `${shape.distinct} distinct value(s): quantile edges would land on top of each other and collapse the ramp`,
+    }
+  }
+  const share = num(shape.probeMaxShare, 0)
+  const bins = num(shape.probeBins, 5)
+  if (share > limit) {
+    return {
+      method: 'quantile', reason: 'imbalance',
+      detail: `with equal intervals the fullest of ${bins} bins would hold ${(share * 100).toFixed(1)}% of the cells (limit ${(limit * 100).toFixed(0)}%), so most of the ramp would say nothing`,
+    }
+  }
+  return {
+    method: 'equal', reason: 'even',
+    detail: `the fullest of ${bins} equal-interval bins holds ${(share * 100).toFixed(1)}% of the cells, so evenly spaced legend numbers are affordable`,
+  }
+}
+
+/**
+ * Cut a value list into colour bins.
+ *
+ * Returns the edges (so a legend can print the real numbers), the population of
+ * each bin, and which method was used and why. Nothing is dropped silently:
+ * values outside a caller-supplied domain are counted in `outside`, and quantile
+ * edges that collapse onto duplicate values are reported in `collapse` with the
+ * reduced bin count -- "5 classes" that is really 3 classes must not be
+ * advertised as 5.
+ *
+ * @param {number[]} values
+ * @param {object} [options]
+ * @param {number} [options.bins=5]
+ * @param {'auto'|'equal'|'quantile'} [options.method='auto']
+ * @param {number} [options.maxBinShare=0.5] occupancy that tips the automatic choice
+ * @param {[number,number]} [options.domain] force the span, so the ramp does not
+ *        move when the caller filters or when two heatmaps are compared
+ */
+export function colorBins(values, options = {}) {
+  const clean = (Array.isArray(values) ? values : []).filter(isNum).slice().sort((a, b) => a - b)
+  const requested = Math.max(1, Math.floor(num(options.bins, 5)))
+  const given = Array.isArray(options.domain) && isNum(options.domain[0]) && isNum(options.domain[1])
+    ? [Math.min(options.domain[0], options.domain[1]), Math.max(options.domain[0], options.domain[1])]
+    : null
+
+  // The probe is measured at the bin count actually being chosen, so the number
+  // in `detail` is the number this data would really produce.
+  const shape = distributionShape(clean, { probeBins: requested, domain: given })
+
+  let lo = given ? given[0] : (shape.empty ? 0 : shape.min)
+  let hi = given ? given[1] : (shape.empty ? 1 : shape.max)
+  const degenerate = !(hi - lo > 1e-12)
+  if (degenerate) {
+    // Every value identical, or a single value. Expand around it rather than
+    // divide by ~zero, so a constant column still renders instead of vanishing.
+    const mid = (lo + hi) / 2
+    lo = mid - 0.5
+    hi = mid + 0.5
+  }
+
+  const forced = options.method === 'equal' || options.method === 'quantile'
+  const auto = chooseBinMethod(shape, { maxBinShare: num(options.maxBinShare, 0.5) })
+  let method = forced ? options.method : auto.method
+  let reason = forced ? 'forced' : auto.reason
+  let detail = forced ? `method "${options.method}" was requested explicitly` : auto.detail
+  if (degenerate) {
+    method = 'equal'
+    reason = 'degenerate'
+    detail = 'every value is identical, so the domain is expanded around it instead of dividing by zero'
+  }
+
+  let edges = dedupeEdges(evenEdges(lo, hi, requested)).edges
+  let measured = countBins(edges, clean)
+  let collapse = 0
+
+  if (method === 'quantile') {
+    const wanted = []
+    for (let i = 0; i <= requested; i++) wanted.push(quantile(clean, i / requested))
+    wanted[0] = lo
+    wanted[wanted.length - 1] = hi
+    const candidate = dedupeEdges(wanted)
+    if (candidate.edges.length < 2) {
+      // Not a preference: fewer than two edges is not a scale.
+      method = 'equal'
+      reason = 'collapse'
+      detail = 'every quantile edge landed on the same value, so the ramp fell back to equal intervals'
+    } else {
+      const tried = countBins(candidate.edges, clean)
+      // Ties can make quantile bins lumpier than equal bins. Choosing quantile
+      // and then delivering a flatter ramp is not a defensible trade, so an
+      // automatic choice is measured against the candidate it replaces. An
+      // explicit method is honoured -- the caller may have reasons.
+      if (!forced && maxShare(tried.counts) >= maxShare(measured.counts)) {
+        method = 'equal'
+        reason = 'no-gain'
+        detail = `quantile bins would have peaked at ${(maxShare(tried.counts) * 100).toFixed(1)}% against ${(maxShare(measured.counts) * 100).toFixed(1)}% for equal intervals, so equal intervals were kept`
+      } else {
+        edges = candidate.edges
+        measured = tried
+        collapse = candidate.collapse
+      }
+    }
+  }
+
+  const counts = measured.counts
+  return {
+    edges,
+    bins: edges.length - 1,
+    requested,
+    /** Bins lost because quantile edges landed on duplicate values. */
+    collapse,
+    method,
+    reason,
+    detail,
+    domain: [lo, hi],
+    counts,
+    total: counts.reduce((a, b) => a + b, 0),
+    /** Values outside a caller-supplied domain; they are clamped, and counted. */
+    outside: measured.outside,
+    outliers: shape.outliers,
+    outlierShare: shape.outlierShare,
+    probeMaxShare: shape.probeMaxShare,
+    degenerate,
+    empty: shape.empty,
+    shape,
+  }
+}
+
+/**
+ * Value -> bin index for a set of edges, the way linearScale is domain -> pixel.
+ *
+ * A non-finite value returns NULL, never 0, and that is the whole point: bin 0
+ * is the ramp's weakest step, so "no measurement" would otherwise be painted as
+ * "the lowest measurement". The caller has to handle null explicitly, and that
+ * is how missing data gets its own visual state instead of joining the ramp.
+ *
+ * Bins are half-open, [e[i], e[i+1]), with the top edge inside the last bin.
+ */
+export function stepScale(edges) {
+  const cleaned = (Array.isArray(edges) ? edges : []).filter(isNum).slice().sort((a, b) => a - b)
+  const kept = []
+  for (const v of cleaned) {
+    if (!kept.length || v > kept[kept.length - 1] + 1e-12) kept.push(v)
+  }
+  const fellBack = kept.length < 2
+  const list = fellBack ? [0, 1] : kept      // nothing usable: still a renderable scale
+
+  const count = list.length - 1        // number of bins
+  const top = count - 1                // index of the last bin
+  return {
+    edges: list,
+    count,
+    /** True when the edges were unusable and a 0-1 ramp had to be substituted. */
+    degenerate: fellBack,
+    step(v) {
+      if (!isNum(v)) return null                    // missing is never the lowest step
+      if (v <= list[0]) return 0
+      if (v >= list[count]) return top
+      for (let i = count - 1; i >= 1; i--) if (v >= list[i]) return i
+      return 0
+    },
+  }
+}

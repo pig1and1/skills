@@ -6,7 +6,7 @@
 每条规则在这里都有对应的代码，而每条规则的理由写在技能里。
 
 ```sh
-node --test      # 89 个单元测试，约 300ms
+node --test      # 253 个单元测试
 node serve.js    # 打开 http://127.0.0.1:4173/complex-test.html
 ```
 
@@ -44,11 +44,11 @@ SURVIVED  boxStats 不做离群判定
 ## 为什么这样分层
 
 ```
-core.js     比例尺 · 圆整刻度 · 堆叠 · 分箱 · 四分位 · 缺口检测 · 降采样 · 格式化 · SVG 基元
-            ↑ 纯函数：数字进、数字出、不碰 DOM
-line.js     把 core 算出的数字放进 SVG
-bar.js      同上
-theme.css   所有颜色都是 token，组件不出现任何具体颜色
+core.js      比例尺 · 圆整刻度 · 堆叠 · 分箱 · 四分位 · 缺口检测 · 降采样 · 格式化 · 色阶 · SVG 基元
+             ↑ 纯函数：数字进、数字出、不碰 DOM
+line.js      bar.js       scatter.js
+histogram.js boxplot.js   heatmap.js     渲染层：把 core 算出的数字放进 SVG
+theme.css    所有颜色都是 token，组件不出现任何具体颜色
 ```
 
 一个图表的数学如果长在它的渲染函数里，**就只能靠看像素来检查**，也就是永远不会被检查。
@@ -100,6 +100,60 @@ barChart(el, {
 就必须同量纲。不同量纲的出路是**拆成上下两张图**，不是加一条右轴——那会画出一个数据里
 并不存在的相关性。`line.read` 的存在本身就意味着"同量纲"。
 
+### 另外四种
+
+```js
+import { scatterChart } from './src/scatter.js'
+scatterChart(el, {
+  points: [{ x: 12.4, y: 0.9, label: 'GET /api/items' }],
+  xLabel: '耗时', xUnit: 'ms',
+  xFromZero: false, yFromZero: false,   // 只表达位置，不必从 0
+  cell: 14, maxMarks: 2000,             // 屏幕空间分箱：重合点聚成一个可读标记，而非一团墨
+  onHover(p) { /* 悬停即读数；记录里的数值字段会自动全部列出 */ },
+})
+```
+
+```js
+import { histogramChart } from './src/histogram.js'
+histogramChart(el, {
+  values: samples,          // 或 { rows, value: r => r.ms }
+  label: '响应时间',
+  // 箱数默认按 Freedman–Diaconis 自适应（IQR→0 时退回 Sturges，再 clamp 到 [4,60]）；
+  // 传 options.bins 可覆盖，但那是政策选择，不是默认
+  domain: null,             // 钉住 x 范围以便多图可比；域外值计入 ignored，不会被静默丢弃
+})
+```
+
+```js
+import { boxplotChart } from './src/boxplot.js'
+boxplotChart(el, {
+  groups: [{ label: '周一', values: [] }, { label: '周二', values: [] }],  // 并排
+  // 或 { rows, group: r => r.day, value: r => r.ms }
+  minBoxSize: 12,           // n 小于它就改画全部数据点——几个点画出的箱会假装有分布
+  iqrFactor: 1.5,           // Tukey 须
+  yFromZero: false,         // 箱线图编码位置与离散度，不是数量
+})
+```
+
+```js
+import { heatmapChart } from './src/heatmap.js'
+heatmapChart(el, {
+  rows: records,            // 长格式：一条记录一个格子
+  row: r => r.hour, col: r => r.day, value: r => r.errors,
+  binMethod: 'auto',        // 'equal' | 'quantile'；auto 按占用率在两者间选
+  colors: null,             // 默认用 theme.css 的顺序色阶；只能传 token
+  missingLabel: '无数据',   // 缺失值必须与最小值视觉可分
+})
+```
+
+**六种图表的轴基线，一句话记住**：图形**面积**代表数量（柱、直方图）→ **必须从 0**；
+只代表**位置或分布**（折线、散点、箱线图）→ 不必从 0。热力图用色阶，没有轴基线。
+
+**悬停即读数**：六个渲染层的 tooltip 都用 `display = 'block'` 显示。`.chart-tip` 在
+`theme.css` 里是 `display: none`，写成 `''` 会回落到 `none`，**tooltip 永远不出现** ——
+本项目在这一行上写错过 **8 次**，而且**看截图发现不了**。
+`tests/tokens.test.js` 另会扫出引用了未声明 token 的地方，那是同一类不报错的静默失败。
+
 ## 内建的数据防御
 
 真实数据是脏的，所以这些不是可选项：
@@ -126,10 +180,12 @@ barChart(el, {
 
 ## 已知局限
 
-- **只有 `line` 和 `bar`**。散点、直方图、热力图、箱线图还没做（`core.js` 里已经有
-  `histogram` / `boxStats`，但还没有对应的渲染层）。
-- **没有针对渲染层的自动化测试**。测试覆盖 `core.js`（纯计算）；`line.js` / `bar.js` 里
-  的像素计算是按规则人工核对的，没有回归保护。
+- **渲染层只有部分自动化测试**。六种图表的**计算**都在 `core.js`（或模块内的具名纯函数）里，
+  被直接单测；但**像素位置、CSS 层叠、DPR、真实 `ResizeObserver` 时序**没有回归保护 ——
+  `tests/scatter.test.js` 起手写了 DOM 桩，但只能覆盖调用约定，覆盖不到真实布局。
+  `complex-test.html` 是浏览器端的补充自检。
 - **没有 TypeScript 类型**，也没有发布流程（没有 `dist/`、没有版本策略）。
 - `preserveAspectRatio="none"` 意味着绘图区按容器宽度横向缩放。因此**所有文字都必须放在
   HTML 覆盖层里**，不能画进 SVG，否则会被拉伸变形——这是约定，不是可选项。
+- **堆叠柱不适合表达"极小占比"**：占比低于 1% 的段在屏幕上不足 1px，既点不中也看不见。
+  要看占比就画独立的占比图，不要把段塞进堆叠柱。

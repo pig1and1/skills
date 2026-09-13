@@ -227,7 +227,9 @@ export function barChart(host, options = {}) {
     } else {
       const col = prepare().columns[i]
       tip.innerHTML = tipHtml(col)
-      tip.style.display = ''
+      // 'block', not '': .chart-tip carries `display:none` in theme.css, so
+      // clearing the inline value falls back to none and the tip never appears.
+      tip.style.display = 'block'
       const box = svg.getBoundingClientRect()
       const area = plotArea(host.clientWidth, height(), pad)
       const bands = bandScale(prepare().columns.length, [area.x, area.x + area.width], { padding: 0.42 })
