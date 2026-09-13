@@ -101,68 +101,29 @@ export function render(host, rows, options = {}) {
 
 ## 参照标准：拿什么当尺子
 
-规则需要参照物。下面是**业界共识**，不是我的偏好。
+规则需要参照物。**完整出处与"这条规则为什么存在"在 [`references/evidence.md`](references/evidence.md)**；
+这里只说**动手时该对照谁**。
 
 ### 表格
 
-**规格基线** —— 一份从 **Carbon DataTable、Polaris DataTable、Atlassian DynamicTable、
-Ant Design Table、UUPM app-interface** 五个系统归纳出的 benchmark：
-
-> [Table (Data Table / Data Grid) — Benchmark Spec](https://cdn.jsdelivr.net/npm/@hegemonart/get-design-done@1.60.1/reference/components/table.md)
-
-它的可取之处不只是结论，还有**写法**：每条断言附来源、每个违规给出可 grep 的检测命令、
-每个反例说明**为什么失败**和**怎么修**。上面的尺寸表与无障碍契约直接取自它。
-
-**实际实现** —— [`openstatusHQ/data-table-filters`](https://github.com/openstatusHQ/data-table-filters)
-（2252★ · MIT · TypeScript）：shadcn/ui + TanStack Table，分面筛选、排序、无限滚动。
-判断"一个认真的表格长什么样"，看它的 issue/PR 记录比读代码更快 —— 例如它专门有一轮
-[`Refactor/shadcn neutral oklch theme`](https://github.com/openstatusHQ/data-table-filters/issues/102)。
+- **规格** —— [Benchmark Spec](https://cdn.jsdelivr.net/npm/@hegemonart/get-design-done@1.60.1/reference/components/table.md)：
+  从 Carbon / Polaris / Atlassian / Ant Design / UUPM 五个系统归纳。§2 的尺寸表与无障碍契约出自它。
+  **它附了可 grep 的检测命令**，做完直接跑。
+- **实物** —— [`openstatusHQ/data-table-filters`](https://github.com/openstatusHQ/data-table-filters)（2252★，MIT）。
 
 ### 图表
 
-**选型** —— FT 的 [Chart Doctor](https://github.com/Financial-Times/chart-doctor)（3341★）。
-它的 *Visual Vocabulary* 用**九类关系**回答"什么数据用什么图"：
-deviation · correlation · ranking · distribution · change over time · part-to-whole ·
-magnitude · spatial · flow。
-**先判断数据属于哪一类，再选图形**，比凭喜好挑图可靠得多。
+- **选型** —— [FT Chart Doctor](https://github.com/Financial-Times/chart-doctor) 的 *Visual Vocabulary*：
+  九类关系（deviation · correlation · ranking · distribution · change over time · part-to-whole ·
+  magnitude · spatial · flow）。**先定类别，再选图形**。
+- **正确性** —— [Carbon — Axes and labels](https://github.com/carbon-design-system/carbon-website/blob/main/src/pages/data-visualization/axes-and-labels/index.mdx)（Y 轴基线判据）。
+- **手艺** —— [Datawrapper Academy](https://www.datawrapper.de/academy) 的折线图与缺失数据两篇，
+  以及 [Claus Wilke 的开源教材](https://github.com/clauswilke/dataviz)。**视觉的细节主要来自这两处。**
 
-**手感（视觉细节）** —— [Datawrapper Academy](https://www.datawrapper.de/academy) 是实践层面
-最好的免费来源，尤其这三篇：
+### 一句忠告
 
-- [What to consider when creating line charts](https://www.datawrapper.de/academy/what-to-consider-when-creating-line-charts)
-  —— 折线 vs 柱状的判据、用**灰色 + 线宽 + 线型**分出主次、直接标注的移动端退化、
-  何时该把基线延伸到 0 或 100%、**平滑曲线为什么会歪曲数据**
-- [How to deal with missing data in line charts](https://www.datawrapper.de/academy/patchy-data)
-  —— 缺口处理，以及**实线 = 采集 / 虚线 = 推测**这条区分的来源
-- [Automatically label data points in line charts](https://www.datawrapper.de/blog/automatically-label-values-in-line-charts)
-
-**教材级的原理** —— Claus Wilke 的
-[*Fundamentals of Data Visualization*](https://github.com/clauswilke/dataviz)（O'Reilly，全书开源）。
-两章与这个 skill 直接相关：*Designing figures without legends*（**直接标注**取代图例的完整论证）
-与 *Common pitfalls of color use*（"定性配色在 **3–5 个类别**时最有效"）。
-
-**实现与配色** —— [`carbon-design-system/carbon-charts`](https://github.com/carbon-design-system/carbon-charts)
-（IBM · D3 + TypeScript）与 [Carbon 设计系统](https://github.com/carbon-design-system/carbon)（9457★）。
-Carbon 明确区分**分类色 / 顺序色 / 发散色**三种用途 —— **用错类型比选错颜色更糟**
-（给顺序数据配分类色，会暗示类别之间存在并不存在的等价关系）。
-
-**配色的硬约束：必须过色觉审计。** 真实项目的失败长这样：
-
-- [`askrjs/askr-charts` #30](https://github.com/askrjs/askr-charts/issues/30) —— 默认分类色里有一对
-  **相邻的红/绿**，红绿色盲无法区分；
-- [`crzyc98/planwise_navigator` #497](https://github.com/crzyc98/planwise_navigator/issues/497) ——
-  调色板**未通过色觉审计**，最后不得不维护两套。
-
-→ 所以 §11 才建议分类色用**同一色系的明度阶梯**：明度差异天生对色觉障碍友好，
-顺序还自带含义（浅→深 = 少→多）。
-
-### 怎么用它们
-
-1. **动手前**：表格查 Benchmark Spec 的 anatomy / states；图表查 Visual Vocabulary 的九类。
-2. **做完后**：用 Benchmark Spec 的 **Do / Don't** 与 **Grep Signatures** 自查 ——
-   它的检测命令是现成的（形如 `grep '<th' | grep -v 'scope='`）。
-3. **借判断，不借依赖**：openstatusHQ 是 React + shadcn，carbon-charts 是 D3。
-   它们值得学的是**决策**，不是它们引的包。
+**借它们的判断，不借它们的依赖。** openstatusHQ 是 React + shadcn，carbon-charts 是 D3。
+值得学的是决策，不是它们引的包。
 
 ---
 
@@ -494,24 +455,20 @@ Carbon 明确区分**分类色 / 顺序色 / 发散色**三种用途 —— **�
 正是这个图表存在的理由。**悬停就该给出全部字段**（堆叠柱的三段分项、折线点的采样次数……），
 **点击只负责把它固定下来**，好让你移开鼠标去别处。
 
-- **悬停**：更新读数，移开还原。
-- **点击**：把当前读数**钉住**，此后的悬停不覆盖它，直到再点一次、点空白或按 Esc。
+### 「悬停」与「点击」的分工（详见 §8）
 
-实现上是件小事，顺序反了却会毁掉体验：**先保证悬停完整，再考虑钉住**。
+一句话：**悬停给全部字段，点击只负责钉住**。三处冲突必须显式定规则 ——
 
-两者必须能**同时存在**：选中一根柱之后再悬停另一根，要能看出"悬停的是哪根、已选中的是哪根"，
-所以是**两个独立的样式**，不是同一个高亮。
+- **钉住优先于悬停**：钉住后移开鼠标，面板内容不变。
+- **tooltip 跟不跟手要写明**：图外面板锁定钉住那条，跟手的 tooltip 显示当前悬停那条
+  （"钉住的答案" vs "我正在指的东西"）。选一种。
+- **键盘必须能解除钉住**，否则按方向键面板不动，用户会以为键盘坏了。
 
-配套的几件小事，少一件都会让人觉得"点了没反应"：
+配套几件小事，少一件都像"点了没反应"：再点一次取消、点空白清除、Esc 清除、
+**图外要有详情面板**（图上的高亮只说明"选了哪个"，说明不了"选的是什么"）、
+同页表格的行也响应点击并同步选中。
 
-- 点击**已选中的柱**取消选中；
-- 点击**空白**清除；
-- **Esc** 清除，**方向键**在柱之间移动选中；
-- 选中后在**图表之外**给出详情面板 —— 图上的高亮只说明"选了哪个"，说明不了"选的是什么"；
-- 若同页还有数据表，**表行也响应点击**，两边选中状态同步。
-
-**图例切换的边界**：全部序列都被隐藏时**自动恢复全部** —— 否则留下的是一张没有任何信息的空图，
-而用户会以为它坏了。
+**图例切换的边界**：全部序列都被隐藏时**自动恢复全部** —— 否则留下一张空图，用户会以为它坏了。
 
 ### ★ 给折线加面积填充，就等于声明它是数量
 
@@ -538,17 +495,6 @@ Carbon 明确区分**分类色 / 顺序色 / 发散色**三种用途 —— **�
 |---|---|---|
 | 有指针悬停 | 悬停 | 点击 |
 | 无指针悬停（触摸） | **点击 / 轻触** | 再点一次，或点空白清除 |
-
-### 悬停、钉住、键盘三者的优先级
-
-它们会互相冲突，需要**显式定规则**（实现常在这里含糊）：
-
-- **钉住优先于悬停**：钉住之后，移开鼠标不应改变面板内容。
-- **但 tooltip 跟不跟手，要明确**：图外的详情面板锁定钉住的那条，跟手的 tooltip 继续显示
-  当前悬停的那条 —— 两者含义不同（"钉住的答案" vs "我正在指的东西"）。
-  **选一种，写下来。**
-- **键盘要能解除钉住**：按方向键时面板毫无变化，用户会以为键盘坏了。
-  让方向键**主动清除钉住并移动选择**。
 
 ### 派生序列（移动平均、累计值）要把参数说全
 
@@ -665,76 +611,21 @@ values stick out. **Grey is a great color to separate what's important from what
 
 ## 12. 交付前自检
 
-**表格**
-- [ ] 一次最多渲染多少行？方案匹配吗？
-- [ ] 列宽**显式**、`table-layout: fixed` 了吗？
-- [ ] 数字列右对齐 + `tabular-nums` 了吗？
-- [ ] **真机滚动**验证过列宽/行高/滚动条都不动吗？
-- [ ] 粘性表头背景不透明、层级明确吗？
-- [ ] hover / selected / focus 三态都有且可区分吗？
+每节都给了判据，这里**只列最容易漏掉的**。**三个必做**不能跳：
 
-**图表**
-- [ ] 这个数据用图表回答的问题，是**形状**而不是精确值吗？
-- [ ] **容器高度在数据到达前就确定**了吗？（CLS 应接近 0）
-- [ ] Canvas 乘了 `devicePixelRatio` 吗？高分屏上验过吗？
-- [ ] 柱状/面积的 Y 轴**从 0** 了吗？折线的域选择有依据吗？
-- [ ] 没有双 Y 轴 / 3D / 超 5 类饼图吗？
-- [ ] 有**文字等价物**吗？序列不只靠颜色区分吗？
+1. **真机滚动一遍**（§1）—— 不是看一眼，是真的滚。列宽 / 行高 / 滚动条位置都不许动。
+2. **喂一批脏数据**（§9）—— `NaN`、乱序、全同值、空集、缺口各来一个。不抛异常，并如实报告丢了几个。
+3. **按最终显示尺寸看**（§11）—— 幻灯片或手机。27 寸上清晰不代表它能用。
 
-**交互**
-- [ ] 图表有 hover 读数吗？brush 有**最小宽度阈值**和**双击清除**的退路吗？
-- [ ] **点击是"选中并保持"还是只有悬停**？点空白 / Esc 能清除吗？图外有详情面板吗？
-- [ ] 复合图里，线上的点**能用同一条轴的刻度读出来**吗？读不出来就该拆图，而不是加第二轴
-- [ ] 堆叠段的**命中区**覆盖整柱了吗（细段点不中）？
-- [ ] 所有视图是否都从**同一个**过滤状态派生？（各自过滤迟早不一致）
-- [ ] 加载态 / 空态都有吗？骨架屏高度与真实内容一致吗？空态说明了**为什么空**吗？
-- [ ] 图表容器可聚焦吗？键盘能等价完成鼠标操作吗？
+其余七条：
 
-**数据（真实数据一定更脏）**
-- [ ] 非有限值 / `null` / 字符串**过滤并计数**了吗？界面说明忽略了多少条吗？
-- [ ] 时间**排序**了吗？同一时间戳是聚合还是丢弃？
-- [ ] **时间缺口断开了吗**？（连续折线等于宣称"这期间一直如此"）
-- [ ] 全同值 / 单点 / 空集分别验过吗？（除零与空态）
-- [ ] 离群值会不会把自适应域拉扁？1%–99% 分位域是否更合适？
-- [ ] 超过 2k 点降采样了吗？降采样后趋势还看得出来吗？
-- [ ] 类别超过 8 种时有 Top-N + 其他吗？
-
-**视觉（决定它像不像"有人认真做过"）**
-- [ ] 标题说的是**发现**而不是图表类型吗？字号分了三档吗？
-- [ ] 标题、图表、面板**对齐到同一条左边缘**吗？（错位是业余图最常见的破绽）
-- [ ] 留白够吗？（拥挤读起来焦虑）
-- [ ] 颜色是"低饱和上下文 + **一个**强调色"，还是所有颜色都在喊？
-- [ ] 网格线淡到几乎看不见吗？层次是 数据 > 轴 > 网格 吗？
-- [ ] 柱顶圆角 4–6px 吗？交互有 150–200ms 过渡吗？
-- [ ] 数字有千分位、去掉了假精度吗？折线末端有直接标注吗？有来源行吗？
-- [ ] **按最终显示尺寸**（幻灯片 / 手机）看过吗？
-
-**无障碍（参照标准的硬性要求，逐条可查）**
-- [ ] `<table>` 有 `<caption>` 或 `aria-label` 吗？
-- [ ] 每个 `<th>` 都有 `scope="col"` 吗？（`grep '<th' | grep -v 'scope='` 应当无输出）
-- [ ] 可排序列有 `aria-sort` 吗？选中行在 `<tr>` 上有 `aria-selected="true"` 吗？
-- [ ] 横向滚动容器有 `tabindex="0"` 吗？键盘能走通整张表吗？
-- [ ] 没有给列宽做动画、没有在 `thead/tbody/tr` 上用 `display: contents` 吗？
-
-**共同**
+- [ ] 列宽是**显式**的吗？`table-layout: fixed` 了吗？数字列有 `tabular-nums` 吗？
+- [ ] **容器高度在数据到达前就固定**了吗？（加载不该推动页面）
+- [ ] 每个 `<th>` 都有 `scope="col"` 吗？—— `grep '<th' | grep -v 'scope='` 应当无输出
+- [ ] 悬停就能读到**全部字段**吗？（不必点击；触屏上点击**必须**是读数据的方式）
+- [ ] 所有视图都从**同一个**过滤状态派生吗？（各自过滤迟早不一致）
 - [ ] 用参照标准的 **Grep Signatures** 扫过一遍吗？
 - [ ] 深浅两套主题都验过吗？
-- [ ] 1000 行级别滚动、或 >2k 点的图表，掉帧吗？（DevTools 实测，别猜）
-- [ ] 键盘能走通吗？
-
-## 13. 已验证的真实故障（对照用）
-
-| 出处 | 症状 | 根因 |
-|---|---|---|
-| [`srelens/srelens` #298](https://github.com/srelens/srelens/issues/298) | 滚动时列宽左右跳；**拖过一次列宽后永久消失** | `table-layout: auto` + 虚拟滚动 |
-| [`nesquena/hermes-webui` #5672](https://github.com/nesquena/hermes-webui/pull/5672) | 移动端滚动跳回 | DOM 重建丢失 `content-visibility` 的尺寸记忆 |
-| [`OctoPunkIO/svelte-datatable` #13](https://github.com/OctoPunkIO/svelte-datatable/issues/13) | Safari 17 粘性表头抖 1–2px | WebKit 怪癖 |
-| [`Selftend/selftend` #2347](https://github.com/Selftend/selftend/issues/2347) · [#2346](https://github.com/Selftend/selftend/issues/2346) | 图表/组件**未预留空间**导致布局偏移 | 高度由内容决定 → 用 "reserve its space" 修掉 |
-| [`Selftend/selftend` #2341](https://github.com/Selftend/selftend/issues/2341) | 布局偏移是否该进 CI、能断言什么 | **CLS 可测量**，可作验收门槛 |
-| [`BenjaminSRussell/cozy-game` #58](https://github.com/BenjaminSRussell/cozy-game/issues/58) | Retina 上 canvas 模糊 | 未做 `devicePixelRatio` 缩放 |
-
-**规范来源**：[Carbon — Axes and labels](https://github.com/carbon-design-system/carbon-website/blob/main/src/pages/data-visualization/axes-and-labels/index.mdx)（Y 轴基线判据）、
-[Avoiding Misleading Data Visualizations](https://github.com/LMK89/Machine-Learning-MD/blob/main/Data-Visualization/Avoiding%20Misleading%20Data%20Visualizations.md)（尺度与截断）。
 
 ## 参考实现（按需加载，是起点不是成品）
 
@@ -742,6 +633,7 @@ values stick out. **Grey is a great color to separate what's important from what
 - `references/VirtualTable.tsx` —— React 固定行高虚拟表格骨架，无依赖。
 - `references/LineChart.ts` —— Canvas 折线图骨架：DPR 正确、容器**预留空间**、`ResizeObserver` 节流。
 - `references/verify.html` —— **自验证页面**：滚动前后列宽快照、数字列宽度波动、`content-visibility` 塌陷复现，全部读数值并自动判定。
+- `references/evidence.md` —— 每条规则对应的**真实故障记录**（GitHub issue / PR）与规范原文出处。想知道"这条规则为什么存在"，去那里。
 
 参考实现均**未经真实项目运行验证**，是为你的项目改写的起点：替换 token、
 按真实列宽填 `<colgroup>`、把行高与 `contain-intrinsic-size` 对齐。
