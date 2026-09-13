@@ -7,6 +7,20 @@
 
 ## 包含的技能
 
+### `github-operations`
+
+用 GitHub 做检索与反馈的通用做法（平台与 harness 无关）：
+
+- **检索优先**：先假设别人已经遇到并讨论过。用**锚点**而不是整句报错 ——
+  两个技术专有名词是甜点；加 `is:closed` 既减量又提质；整句报错 0 命中不代表方法错
+- **知识分层**：源码给"实现"，Issues/Discussions 给"坑图谱"，
+  PR review 给"决策档案" —— 后两者文档里没有
+- **反馈渠道**：先读 `CONTRIBUTING`，不少项目不收外部 PR；不收时用
+  fork + commit 链接，而不是提一个不会被看的 PR
+- **非交互纪律**：`GIT_TERMINAL_PROMPT=0`，别让凭据提示挂死无人值守会话
+- **两个陷阱**：GraphQL 与 REST 的返回层级不同；`git push` 可能成功却以非零码退出
+- 含可直接复制的 `curl` + `jq` 检索命令
+
 ### `frontend-tables-and-charts`
 
 前端表格与图表：好看、简洁、稳定、快。
