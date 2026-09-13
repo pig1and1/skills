@@ -18,9 +18,10 @@
  *      neutral tile, never the ramp's weakest step, and the legend names it.
  *   3. HOLES KEEP THEIR PLACE. A (row, column) pair with no record still gets a
  *      cell, so adjacency in the matrix keeps meaning adjacency in the data.
- *   4. THE RAMP IS A LIGHTNESS LADDER, NOT A RAINBOW. See HEAT_RAMP: the six
- *      steps are a subset of the existing `--chart-cat-*` tokens chosen to be
- *      monotone in BOTH themes, so no new token and no new CSS was needed.
+ *   4. THE RAMP IS A LIGHTNESS LADDER, NOT A RAINBOW. See HEAT_RAMP: seven steps
+ *      of the dedicated `--chart-seq-*` tokens, one set per theme, monotone in
+ *      OKLab lightness in both and at least 3:1 from the surface at its weakest
+ *      step. `options.colors` still replaces it outright.
  *
  * The grid assembly, the tooltip markup and the keyboard movement are exported
  * as pure functions so they can be tested in node -- this package has no browser
@@ -40,32 +41,47 @@ const NS = 'http://www.w3.org/2000/svg'
 export const BLANK_LABEL = '(未命名)'
 
 /**
- * The sequential ramp.
+ * The sequential ramp: theme.css's `--chart-seq-*` tokens, weakest step first.
  *
- * theme.css ships one categorical ramp (`--chart-cat-1..8`) built as a single
- * hue's lightness ladder, which is exactly what a sequential scale needs -- so
- * this needed no new token.
+ * theme.css ships them as one hue's lightness ladder, one set per theme, and the
+ * direction of meaning is the same in both: a larger value sits further from the
+ * surface (palest -> darkest in light mode, darkest -> palest in dark mode), so
+ * "stronger" never means two different things depending on the reader's theme.
+ * One array serves both themes because the theme picks the values.
  *
- * It did need care: the eight tokens are NOT monotone in both themes. Measured
- * in OKLab lightness, light mode runs 1,7,5,2,6,8,3,4 from palest to darkest
- * while dark mode runs 1,5,2,8,6,3,7,4 -- and those two orders contradict each
- * other (7 is lighter than 5 in light mode and darker in dark mode), so no
- * eight-step ramp can be monotone in both. These six are the longest subset that
- * is, verified in both themes by OKLab L and by WCAG contrast against each
- * surface (light 1.5:1 -> 13.7:1, dark 1.6:1 -> 11.3:1). One array therefore
- * serves both themes with no media query.
+ * This replaces a hand-picked subset of `--chart-cat-*`. That subset was a
+ * workaround, not a design: the categorical tokens are NOT monotone in both
+ * themes, the longest monotone subset had to begin at a step that measured 1.5:1
+ * against a white surface -- a step the eye reads as an empty cell -- and reusing
+ * them left magnitude and identity sharing one set of colours.
  *
- * A dedicated sequential token set would need theme.css to change; it was off
- * limits, so this is the honest substitute rather than a hand-rolled colour.
+ * Four properties, all measured by tests/seq.test.js against theme.css itself:
+ * monotone OKLab lightness in each theme, adjacent steps at least 0.04 apart in
+ * OKLab L, at least 3:1 against the theme's own surface at the weakest step, and
+ * a single hue across all fourteen values. Change the values if a better ladder
+ * appears; do not quietly drop one of those properties.
  */
 export const HEAT_RAMP = [
-  'var(--chart-cat-1)',   // weakest
-  'var(--chart-cat-5)',
-  'var(--chart-cat-2)',
-  'var(--chart-cat-6)',
-  'var(--chart-cat-3)',
-  'var(--chart-cat-4)',   // strongest
+  'var(--chart-seq-1)',   // weakest
+  'var(--chart-seq-2)',
+  'var(--chart-seq-3)',
+  'var(--chart-seq-4)',
+  'var(--chart-seq-5)',
+  'var(--chart-seq-6)',
+  'var(--chart-seq-7)',   // strongest
 ]
+
+/**
+ * The ramp to paint with: the caller's tokens when they supplied a usable list,
+ * otherwise the theme's sequential ladder.
+ *
+ * Pure and exported on purpose -- "the option still overrides the default" is a
+ * behaviour worth a direct test, and it is exactly the behaviour that breaks
+ * silently when a default is refactored.
+ */
+export function resolveRamp(colors) {
+  return Array.isArray(colors) && colors.length ? colors : HEAT_RAMP
+}
 
 /** Missing data: a neutral tile, hatched so it cannot be mistaken for a step. */
 export const MISSING_FILL = 'var(--chart-sunken)'
@@ -293,7 +309,7 @@ export function rampIndexFor(step, bins, ramp = HEAT_RAMP) {
  * step, which is what makes `stepScale` returning null structurally safe.
  */
 export function fillForStep(step, options = {}) {
-  const ramp = Array.isArray(options.ramp) && options.ramp.length ? options.ramp : HEAT_RAMP
+  const ramp = resolveRamp(options.ramp)
   if (!isNum(step)) return options.missing === undefined ? MISSING_FILL : options.missing
   return ramp[rampIndexFor(step, options.bins, ramp)]
 }
@@ -307,7 +323,7 @@ export function fillForStep(step, options = {}) {
  */
 export function heatTipHtml(cell, options = {}) {
   if (!cell) return ''
-  const ramp = Array.isArray(options.ramp) && options.ramp.length ? options.ramp : HEAT_RAMP
+  const ramp = resolveRamp(options.ramp)
   const bins = Math.max(1, Math.floor(num(options.bins, ramp.length)))
   const edges = Array.isArray(options.edges) ? options.edges : []
   const fmt = typeof options.formatValue === 'function' ? options.formatValue : (v) => formatNumber(v)
@@ -402,7 +418,7 @@ export function resolveCell(target, axes = {}) {
  * @param {number} [options.bins=DEFAULT_BINS]       colour classes
  * @param {'auto'|'equal'|'quantile'} [options.binMethod='auto']
  * @param {number} [options.maxBinShare=0.5]         occupancy that tips the auto choice
- * @param {string[]} [options.colors]                override the ramp (tokens only)
+ * @param {string[]} [options.colors]                override the ramp (tokens only; default --chart-seq-1..7)
  * @param {number} [options.cellGap=0.08]            gap between cells, as a share of the band
  * @param {string} [options.rowAxis='行']            axis name, for the tooltip
  * @param {string} [options.missingLabel='无数据']
@@ -445,7 +461,7 @@ export function heatmapChart(host, options = {}) {
   const observer = new ResizeObserver(() => schedule())
   const height = () => num(state.height, 320)
   const fmtVal = (v) => (typeof state.formatValue === 'function' ? state.formatValue(v) : formatNumber(v))
-  const rampOf = () => (Array.isArray(state.colors) && state.colors.length ? state.colors : HEAT_RAMP)
+  const rampOf = () => resolveRamp(state.colors)
 
   /** Pure: options -> grid + colour bins + the value -> bin scale. */
   function build() {

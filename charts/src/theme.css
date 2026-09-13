@@ -48,6 +48,33 @@
   --chart-cat-7: #aab5d0;
   --chart-cat-8: #454f73;
 
+  /* Sequential ramp for magnitude (heatmap). One hue's lightness ladder, one set
+     per theme, dedicated to this role so the categorical tokens stay purely
+     categorical and neither role has to borrow the other's colours.
+
+     Direction: "a larger value sits further from the surface", which is the same
+     statement in both themes even though the lightness runs opposite ways --
+     palest -> darkest here, darkest -> palest in the dark block. The reader
+     learns one rule ("stronger means more contrast against the page"), not two.
+
+     The numbers, measured in OKLab L at a single blue hue (~265, the palette's
+     data hue): 0.649 -> 0.272 across the seven steps, adjacent steps 0.061-0.064
+     apart, weakest step 3.27:1 against #ffffff. The old arrangement reused
+     --chart-cat-* and its weakest step measured 1.5:1 against the same surface,
+     which is a step the eye reads as "empty cell" rather than "small value".
+
+     tests/seq.test.js re-measures all of this and fails if the ladder stops being
+     monotone, stops being evenly spaced, drops under 3:1 at the weak end, or
+     drifts away from one hue. Changing a value here is fine; breaking one of
+     those four properties is not. */
+  --chart-seq-1: #788ebf;   /* weakest */
+  --chart-seq-2: #5d7abb;
+  --chart-seq-3: #4767af;
+  --chart-seq-4: #37549b;
+  --chart-seq-5: #294382;
+  --chart-seq-6: #1e3367;
+  --chart-seq-7: #13244d;   /* strongest */
+
   /* semantic */
   --chart-good: #15803d;
   --chart-warn: #a16207;
@@ -89,6 +116,20 @@
     --chart-cat-6: #6b7cae;
     --chart-cat-7: #a3b1d6;
     --chart-cat-8: #58648c;
+
+    /* The sequential ramp, re-picked for a dark surface rather than inverted:
+       same hue, same direction of meaning (stronger = further from the surface),
+       so it runs darkest -> palest. OKLab L 0.520 -> 0.938, adjacent steps
+       0.068-0.071 apart, weakest step 3.25:1 against #15171c. Chroma falls away
+       at both ends: the top steps have to stay inside sRGB without the hue
+       shifting off the family. */
+    --chart-seq-1: #596989;   /* weakest */
+    --chart-seq-2: #677caa;
+    --chart-seq-3: #7791ca;
+    --chart-seq-4: #8aa7e4;
+    --chart-seq-5: #a3bdf5;
+    --chart-seq-6: #c0d4fe;
+    --chart-seq-7: #e0ebff;   /* strongest */
 
     --chart-good: #4ade80;
     --chart-warn: #fbbf24;
