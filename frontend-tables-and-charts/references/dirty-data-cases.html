@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>脏数据测试 —— 朴素实现 vs 加固实现</title>
+<style>
+  :root {
+    --bg:#fafbfc; --fg:#1c1e26; --muted:#6b7280; --card:#fff;
+    --line: color-mix(in srgb, currentColor 12%, transparent);
+    --grid: color-mix(in srgb, currentColor 9%, transparent);
+    --ok:#15803d; --bad:#b91c1c; --warn:#a16207;
+    --c1:#4f7cf6; --c2:#14a3a3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#101114; --fg:#e6e8ee; --muted:#9aa0b0; --card:#17181c;
+      --grid: color-mix(in srgb, currentColor 14%, transparent);
+      --ok:#4ade80; --bad:#f87171; --warn:#fbbf24;
+      --c1:#6b93ff; --c2:#2dd4bf;
+    }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:20px; background:var(--bg); color:var(--fg);
+         font:13px/1.6 ui-sans-serif, system-ui, "Segoe UI", sans-serif; }
+  h1 { font-size:18px; margin:0 0 4px; }
+  h2 { font-size:14px; margin:0; }
+  .sub { color:var(--muted); margin:0 0 18px; max-width:94ch; }
+  code { background:color-mix(in srgb, currentColor 8%, transparent); padding:1px 5px; border-radius:4px; }
+
+  .case { background:var(--card); border:1px solid var(--line); border-radius:10px;
+          padding:12px 14px; margin-bottom:14px; }
+  .case .why { color:var(--muted); font-size:12px; margin:4px 0 10px; }
+  .pair { display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:start; }
+  @media (max-width:820px) { .pair { grid-template-columns:1fr; } }
+  .side h3 { font-size:12px; margin:0 0 4px; color:var(--muted); font-weight:550; }
+  .plot { position:relative; height:130px; border:1px solid var(--line); border-radius:7px;
+          overflow:hidden; background:color-mix(in srgb, currentColor 2%, transparent); }
+  .plot svg { display:block; width:100%; height:100%; }
+  .diag { font-family:ui-monospace, Consolas, monospace; font-size:11px; white-space:pre-wrap;
+          margin-top:5px; color:var(--muted); }
+  .verdict { margin-top:9px; font-size:12px; padding:6px 9px; border-radius:6px;
+             background:color-mix(in srgb, currentColor 5%, transparent); }
+  .verdict .ok { color:var(--ok); font-weight:600; }
+  .verdict .bad { color:var(--bad); font-weight:600; }
+  .verdict .warn { color:var(--warn); font-weight:600; }
+
+  .summary { position:sticky; top:0; z-index:9; background:color-mix(in srgb, Canvas 92%, transparent);
+             backdrop-filter:blur(8px); border:1px solid var(--line); border-radius:10px;
+             padding:10px 14px; margin-bottom:16px; font-size:13px; }
+  .summary b { font-variant-numeric:tabular-nums; }
+</style>
+</head>
+<body>
+
+<h1>脏数据测试 —— 朴素实现 vs 加固实现</h1>
+<p class="sub">
+  同一批病态数据，两种写法各画一次。<strong>朴素版</strong>照搬常见写法，
+  <strong>加固版</strong>按 <code>frontend-tables-and-charts</code> 新增的脏数据规则处理。
+  每例下方给出可读的诊断数值，而不是让你用肉眼判断。
+</p>
+
+<div class="summary" id="summary">运行中…</div>
+<div id="cases"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ============================================================ 病态数据集
+  // 每条记录形如 { t: 毫秒时间戳, v: 分数, kind: 异常类型或 null }
+  function rows(n, mk) {
+    var a = [];
+    for (var i = 0; i < n; i++) a.push(mk(i));
+    return a;
+  }
+  function broken(v) { return typeof v !== 'number' || !isFinite(v); }
+
+  var CASES = [
+    {
+      id: 'same',
+      title: '全同值',
+      why: '所有分数都是 88。朴素版按 (max-min) 求域 → 除以 0。',
+      rows: function () { return rows(600, function (i) { return { t: i * 36e5, v: 88, kind: null }; }); },
+      expectGap: false
+    },
+    {
+      id: 'single',
+      title: '只有一个数据点',
+      why: '首尾时间相同 → x 轴跨度 0 → 除 0。',
+      rows: function () { return [{ t: 0, v: 73, kind: null }]; },
+      expectGap: false
+    },
+    {
+      id: 'empty',
+      title: '空集',
+      why: '零条记录。不该画出一条平线，也不该报错。',
+      rows: function () { return []; },
+      expectGap: false
+    },
+    {
+      id: 'dirty',
+      title: '含脏值（20%）',
+      why: 'NaN / null / 字符串混入。朴素版让它们参与 Math.min → 整个域变成 NaN。',
+      rows: function () {
+        return rows(600, function (i) {
+          var v = 90 + Math.sin(i / 20) * 5;
+          if (i % 5 === 0) v = [NaN, null, undefined, 'abc', Infinity][i % 5];
+          return { t: i * 36e5, v: v, kind: null };
+        });
+      },
+      expectGap: false
+    },
+    {
+      id: 'unsorted',
+      title: '时间乱序',
+      why: '记录顺序被打乱。不排序就画 → 折线来回穿插成乱麻。',
+      rows: function () {
+        var a = rows(400, function (i) { return { t: i * 36e5, v: 90 + Math.cos(i / 15) * 6, kind: null }; });
+        for (var i = a.length - 1; i > 0; i--) { var j = (Math.random() * (i + 1)) | 0; var s = a[i]; a[i] = a[j]; a[j] = s; }
+        return a;
+      },
+      expectGap: false
+    },
+    {
+      id: 'gap',
+      title: '时间缺口（两段空洞）',
+      why: '中间几天完全没有数据。朴素版把缺口连起来 —— 图上出现一段不存在的平稳期，这是撒谎。',
+      rows: function () {
+        var a = [], t = 0, H = 36e5;
+        for (var i = 0; i < 40; i++) a.push({ t: t += H, v: 92 + Math.sin(i / 6) * 3, kind: null });
+        t += 60 * H;                                   // 缺口 1：60 小时
+        for (i = 0; i < 40; i++) a.push({ t: t += H, v: 88 + Math.cos(i / 5) * 4, kind: null });
+        t += 120 * H;                                  // 缺口 2：120 小时
+        for (i = 0; i < 40; i++) a.push({ t: t += H, v: 80 + Math.sin(i / 4) * 6, kind: null });
+        return a;
+      },
+      expectGap: true
+    },
+    {
+      id: 'skew',
+      title: '极端偏斜（1 个离群低分）',
+      why: '999 条 95 分 + 1 条 5 分。自适应域会被单个离群值拉扁，其余全挤在顶部一条线里。',
+      rows: function () {
+        var a = rows(999, function (i) { return { t: i * 36e5, v: 95, kind: null }; });
+        a.push({ t: 999 * 36e5, v: 5, kind: null });
+        return a;
+      },
+      expectGap: false
+    },
+    {
+      id: 'manykinds',
+      title: '类别爆炸（50 种类型）',
+      why: '分类色只有 6–8 种可辨。朴素版给 50 个类别各配一色 → 图例不可读，颜色不再有含义。',
+      rows: function () {
+        return rows(2000, function (i) {
+          return { t: i * 36e5, v: 90 + (i % 7), kind: 'ERR_' + String(i % 50).padStart(2, '0') };
+        });
+      },
+      expectGap: false
+    },
+    {
+      id: 'huge',
+      title: '海量（50000 点）',
+      why: '所有点都塞进 SVG。朴素版把 5 万个 DOM 节点交给浏览器。',
+      rows: function () {
+        return rows(50000, function (i) { return { t: i * 6e4, v: 90 + Math.sin(i / 900) * 8, kind: null }; });
+      },
+      expectGap: false
+    }
+  ];
+
+  // ============================================================ 朴素实现
+  // 照搬常见写法：不排序、不过滤脏值、不检测缺口、不降采样、域靠 max-min。
+  function naive(rowsIn) {
+    // 朴素版不检测缺口 —— 这里刻意没有 gaps 字段，判据靠它缺席来成立。
+    var d = { points: rowsIn.length, domain: null, segments: 0, skipped: 0, sampled: false, error: null, sorted: false };
+    try {
+      if (!rowsIn.length) return { d: d, svg: '' };
+
+      var vs = rowsIn.map(function (r) { return r.v; });          // 脏值照样参与
+      var mn = Math.min.apply(null, vs), mx = Math.max.apply(null, vs);
+      var pad = (mx - mn) * 0.18 || 1;
+      var lo = mn - pad, hi = mx + pad;
+      d.domain = [lo, hi];
+
+      var t0 = rowsIn[0].t, t1 = rowsIn[rowsIn.length - 1].t;      // 不排序 → 首尾未必是真首尾
+      var W = 480, H = 130, PT = 6, PB = 6, PL = 4, PR = 4;
+      var plotH = H - PT - PB, plotW = W - PL - PR;
+      var x = function (t) { return PL + ((t - t0) / Math.max(1, t1 - t0)) * plotW; };
+      var y = function (v) { return PT + plotH - ((v - lo) / (hi - lo)) * plotH; };
+
+      var pts = rowsIn.map(function (r) { return x(r.t).toFixed(1) + ' ' + y(r.v).toFixed(1); });
+      d.segments = 1;
+      return { d: d, svg: '<path d="M' + pts.join(' L') + '" fill="none" stroke="var(--c1)" stroke-width="1.4" vector-effect="non-scaling-stroke"/>' };
+    } catch (e) {
+      d.error = e.message;
+      return { d: d, svg: '' };
+    }
+  }
+
+  // ============================================================ 加固实现
+  function hardened(rowsIn) {
+    var d = { points: 0, domain: null, segments: 0, skipped: 0, sampled: false, error: null, gaps: 0 };
+    try {
+      // 1) 数值卫生：非有限值直接剔除，并计数
+      var clean = [];
+      for (var i = 0; i < rowsIn.length; i++) {
+        var r = rowsIn[i];
+        if (broken(r.v) || broken(r.t)) { d.skipped++; continue; }
+        clean.push({ t: r.t, v: r.v, kind: r.kind });
+      }
+
+      // 2) 时间排序（同一时间戳合并，取均值而不是丢掉）
+      clean.sort(function (a, b) { return a.t - b.t; });
+      var merged = [];
+      for (i = 0; i < clean.length; i++) {
+        var last = merged[merged.length - 1];
+        if (last && last.t === clean[i].t) { last.sum += clean[i].v; last.n++; last.v = last.sum / last.n; }
+        else merged.push({ t: clean[i].t, v: clean[i].v, sum: clean[i].v, n: 1, kind: clean[i].kind });
+      }
+      d.points = merged.length;
+      d.sorted = true;                              // 已按时间排序
+      if (!merged.length) return { d: d, svg: '' };
+
+      // 3) 降采样：超过阈值就按时间桶聚合（画不出来的点不必画）
+      var MAXPTS = 700;
+      var pts = merged;
+      if (merged.length > MAXPTS) {
+        var bucket = Math.ceil(merged.length / MAXPTS);
+        var out = [];
+        for (i = 0; i < merged.length; i += bucket) {
+          var s = 0, n = 0, tSum = 0, lastT = 0;
+          for (var j = i; j < Math.min(i + bucket, merged.length); j++) { s += merged[j].v; n++; tSum += merged[j].t; lastT = merged[j].t; }
+          out.push({ t: Math.round(tSum / n), v: s / n, gap: merged[i].gap });
+        }
+        pts = out;
+        d.sampled = true;
+      }
+      d.rendered = pts.length;                      // 实际交给 SVG 的点数（降采样后）
+
+      // 4) 缺口检测：相邻间隔超过中位间隔的 3 倍即视为断开
+      var deltas = [];
+      for (i = 1; i < pts.length; i++) deltas.push(pts[i].t - pts[i - 1].t);
+      deltas.sort(function (a, b) { return a - b; });
+      var median = deltas.length ? deltas[deltas.length >> 1] : 0;
+      var gapAt = [];
+      if (median > 0) {
+        for (i = 1; i < pts.length; i++) if (pts[i].t - pts[i - 1].t > median * 3) gapAt.push(i);
+      }
+      d.gaps = gapAt.length;
+
+      // 5) 退化域：全同值 / 单点 → 居中展开，绝不除零
+      var vs = pts.map(function (p) { return p.v; });
+      var mn = Math.min.apply(null, vs), mx = Math.max.apply(null, vs);
+      var lo, hi;
+      if (!(mx - mn > 1e-9)) { lo = mn - 1; hi = mx + 1; }
+      else { var pad = (mx - mn) * 0.18; lo = mn - pad; hi = mx + pad; }
+      d.domain = [lo, hi];
+
+      var W = 480, H = 130, PT = 6, PB = 6, PL = 4, PR = 4;
+      var plotH = H - PT - PB, plotW = W - PL - PR;
+      var t0 = pts[0].t, t1 = pts[pts.length - 1].t;
+      var span = Math.max(1, t1 - t0);
+      var x = function (t) { return PL + ((t - t0) / span) * plotW; };   // 单点时 span=1，落在左端
+      var y = function (v) { return PT + plotH - ((v - lo) / (hi - lo)) * plotH; };
+
+      // 6) 按缺口切成多段画 —— 不跨空洞连线
+      var segs = [], cur = [];
+      var cuts = gapAt.concat([pts.length]);
+      var prev = 0;
+      cuts.forEach(function (cut) {
+        var seg = pts.slice(prev, cut);
+        if (seg.length) segs.push(seg);
+        prev = cut;
+      });
+      if (segs.length > 1 && segs[segs.length - 1].length === 0) segs.pop();
+      d.segments = segs.length;
+
+      var svg = segs.map(function (seg) {
+        // 单点段画一个圆点，否则画不出任何东西
+        if (seg.length === 1) {
+          return '<circle cx="' + x(seg[0].t).toFixed(1) + '" cy="' + y(seg[0].v).toFixed(1) +
+            '" r="2.5" fill="var(--c2)"/>';
+        }
+        var path = 'M' + seg.map(function (p) { return x(p.t).toFixed(1) + ' ' + y(p.v).toFixed(1); }).join(' L');
+        return '<path d="' + path + '" fill="none" stroke="var(--c2)" stroke-width="1.4" ' +
+          'stroke-linejoin="round" vector-effect="non-scaling-stroke"/>';
+      }).join('');
+      return { d: d, svg: svg };
+    } catch (e) {
+      d.error = e.message;
+      return { d: d, svg: '' };
+    }
+  }
+
+  // ============================================================ 判定
+  function judge(c, nd, hd, nSvg, hSvg) {
+    var problems = [], fixes = [];
+    // 缓存一次：某些案例要造 5 万个点，别重复生成三遍。
+    if (!c._cache) c._cache = c.rows();
+    var data = c._cache;
+    var empty = data.length === 0;
+
+    if (nd.error) problems.push('朴素版抛异常：' + nd.error);
+    if (hd.error) fixes.push('加固版也抛了异常：' + hd.error);
+
+    // 域是否有效 —— 脏值最典型的后果
+    if (nd.domain && (broken(nd.domain[0]) || broken(nd.domain[1])))
+      problems.push('域无效 [' + nd.domain.map(String).join(', ') + ']');
+    if (hd.domain && (broken(hd.domain[0]) || broken(hd.domain[1])))
+      fixes.push('加固版域无效');
+
+    // 时间顺序：不排序就按原始顺序连线
+    if (c.id === 'unsorted') {
+      if (!nd.sorted) problems.push('未按时间排序，折线按原始顺序来回穿插');
+      if (hd.sorted) fixes.push('已按时间排序');
+    }
+
+    // 时间缺口：朴素版永远只有一段，图上凭空多出一段平稳期
+    if (c.expectGap) {
+      if (!nd.gaps) problems.push('未检测缺口，折线跨过空洞连成一段');
+      if (hd.gaps > 0) fixes.push('检出 ' + hd.gaps + ' 处缺口，断开为 ' + hd.segments + ' 段');
+    }
+
+    // 脏值
+    if (nd.skipped === 0 && hd.skipped > 0) problems.push('脏值与有限值混在一起参与计算');
+    if (hd.skipped > 0) fixes.push('剔除 ' + hd.skipped + ' 个非有限值并计数');
+
+    // 降采样
+    if (data.length > 2000 && !nd.sampled) problems.push('把 ' + data.length + ' 个点全部塞进 DOM');
+    if (hd.sampled) fixes.push('降采样 ' + hd.points + ' → ' + hd.rendered + ' 点');
+
+    // 渲染产出（空集本来就不该画出任何东西，两边都不画才是对的）
+    if (!nSvg && !empty) problems.push('朴素版没有渲染出任何图形');
+    if (!hSvg && !empty) fixes.push('加固版没有渲染出图形');
+
+    return { problems: problems, fixes: fixes };
+  }
+
+  // ============================================================ 渲染
+  var casesEl = document.getElementById('cases');
+  var tally = { bad: 0, cases: 0 };
+
+  CASES.forEach(function (c) {
+    var data = c.rows();
+    var n = naive(data);
+    var h = hardened(data);
+    var v = judge(c, n.d, h.d, n.svg, h.svg);
+    if (v.problems.length) tally.bad++;
+    tally.cases++;
+
+    var el = document.createElement('div');
+    el.className = 'case';
+    el.innerHTML =
+      '<h2>' + c.title + '</h2>' +
+      '<div class="why">' + c.why + '</div>' +
+      '<div class="pair">' +
+        '<div class="side"><h3>朴素版</h3>' +
+          '<div class="plot"><svg viewBox="0 0 480 130" preserveAspectRatio="none">' + n.svg + '</svg></div>' +
+          '<div class="diag">' + diagText(n.d) + '</div>' +
+        '</div>' +
+        '<div class="side"><h3>加固版</h3>' +
+          '<div class="plot"><svg viewBox="0 0 480 130" preserveAspectRatio="none">' + h.svg + '</svg></div>' +
+          '<div class="diag">' + diagText(h.d) + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="verdict">' +
+        (v.problems.length
+          ? '<span class="bad">朴素版问题</span>：' + v.problems.join('；')
+          : '<span class="ok">朴素版本例无问题</span>') +
+        (v.fixes.length ? '<br><span class="ok">加固版处理</span>：' + v.fixes.join('；') : '') +
+      '</div>';
+    casesEl.appendChild(el);
+  });
+
+  function diagText(d) {
+    return 'points   : ' + d.points + '\n' +
+           'domain   : ' + (d.domain ? '[' + d.domain[0].toFixed(1) + ', ' + d.domain[1].toFixed(1) + ']' : '—') + '\n' +
+           'segments : ' + d.segments + '   gaps: ' + (d.gaps || 0) + '\n' +
+           'skipped  : ' + d.skipped + '   sampled: ' + d.sampled +
+           (d.error ? '\nERROR    : ' + d.error : '');
+  }
+
+  document.getElementById('summary').innerHTML =
+    '共 <b>' + tally.cases + '</b> 例，其中朴素版出问题 <b>' + tally.bad + '</b> 例。' +
+    '每次 <code>Math.min/Math.max</code> 拿到脏值，整个域就变成 <code>NaN</code>；' +
+    '每个未检测的时间缺口，图上都会多出一段现实中并不存在的平稳期。';
+})();
+</script>
+</body>
+</html>
