@@ -14,7 +14,6 @@ import {
   sanitize, stack, formatNumber, formatDate,
   esc, px, barSegmentPath, linePath,
 } from './core.js'
-
 const NS = 'http://www.w3.org/2000/svg'
 
 /**

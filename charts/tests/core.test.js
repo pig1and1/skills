@@ -190,6 +190,22 @@ test('boxStats computes quartiles and flags outliers', () => {
   assert.equal(s.max, 5)
 })
 
+test('boxStats flags low outliers too, not only high ones', () => {
+  // Mutation testing found this gap: the original case had a high outlier only,
+  // so breaking the LOWER fence changed nothing and the mutant survived.
+  const s = boxStats([-100, 1, 2, 3, 4, 5])
+  assert.ok(s.outliers.includes(-100), 'a far-below point must be an outlier')
+  assert.equal(s.min, 1, 'the whisker stops at the last inlier')
+  assert.equal(s.count, 6)
+
+  // Both sides at once.
+  const both = boxStats([-500, 1, 2, 3, 4, 5, 900])
+  assert.ok(both.outliers.includes(-500))
+  assert.ok(both.outliers.includes(900))
+  assert.equal(both.min, 1)
+  assert.equal(both.max, 5)
+})
+
 test('boxStats on empty and single inputs', () => {
   assert.equal(boxStats([]).empty, true)
   const one = boxStats([42])

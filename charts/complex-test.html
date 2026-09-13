@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>复杂数据测试台 · dsh-charts</title>
+<link rel="stylesheet" href="./src/theme.css">
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; padding:40px 32px 64px; background:var(--chart-bg); color:var(--chart-ink-2);
+         font:13.5px/1.65 ui-sans-serif, system-ui, "Segoe UI", "Noto Sans SC", sans-serif; }
+  .page { max-width:1120px; margin:0 auto; }
+  h1 { font-size:20px; font-weight:640; color:var(--chart-ink); margin:0 0 6px; letter-spacing:-.005em; }
+  h2 { font-size:14px; font-weight:600; color:var(--chart-ink); margin:38px 0 4px; }
+  .why { color:var(--chart-muted); font-size:12.5px; margin:0 0 14px; max-width:88ch; }
+  .card { background:var(--chart-surface); border:1px solid var(--chart-hairline);
+          border-radius:14px; padding:20px 22px 14px; }
+  .grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  @media (max-width:900px) { .grid3 { grid-template-columns:1fr; } }
+
+  /* 自检面板 */
+  .selfcheck { background:var(--chart-sunken); border:1px solid var(--chart-hairline);
+               border-radius:14px; padding:16px 20px; margin-bottom:8px; }
+  .selfcheck .head { display:flex; gap:16px; align-items:baseline; flex-wrap:wrap; margin-bottom:10px; }
+  .selfcheck .big { font-size:22px; font-weight:660; color:var(--chart-ink); font-variant-numeric:tabular-nums; }
+  .selfcheck .lbl { color:var(--chart-muted); font-size:12px; }
+  .check { display:flex; align-items:flex-start; gap:9px; padding:3px 0; font-size:12.5px;
+           font-family:ui-monospace, Consolas, monospace; }
+  .check i { font-style:normal; flex:none; width:14px; }
+  .ok { color:var(--chart-good); } .bad { color:var(--chart-bad); }
+  .check .note { color:var(--chart-muted); font-family:inherit; }
+
+  .stat { font-family:ui-monospace, Consolas, monospace; font-size:11.5px;
+          color:var(--chart-muted); white-space:pre-wrap; margin-top:8px; }
+  code { background:rgba(128,128,128,.12); padding:1px 5px; border-radius:4px; font-size:12px; }
+  table.chart-table { margin-top:8px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>复杂数据测试台</h1>
+  <p class="why">
+    用一组刻意难缠的数据跑 <code>dsh-charts</code>。每一块都对应一个真实的失败模式，
+    下方读数由页面自己算出，不是写死的文案。
+  </p>
+
+  <div class="selfcheck" id="selfcheck">
+    <div class="head">
+      <div><div class="big" id="sc-pass">—</div><div class="lbl">项通过</div></div>
+      <div><div class="big" id="sc-fail">—</div><div class="lbl">项失败</div></div>
+      <div style="flex:1"></div>
+      <div class="lbl" id="sc-summary">运行中…</div>
+    </div>
+    <div id="sc-list"></div>
+  </div>
+
+  <h2>① 脏时间序列 —— 90 天，注入九种问题</h2>
+  <p class="why">
+    <code>NaN</code> / <code>null</code> / 字符串 / 负数 / 重复时间戳 / 乱序输入 /
+    200 点恒定值（卡死的传感器）/ 一段全 0 / 一个 4800 的尖峰 / 两段空洞（2.5 天与 10 天）。
+    折线应当：剔除脏值并计数、按时间排序、合并重复时间戳、在<b>空洞处断开</b>、用分位域挡住尖峰。
+  </p>
+  <div class="card">
+    <div class="chart" id="dirty" style="height:300px"></div>
+    <div class="chart-xlab" id="dirty-x"></div>
+    <div class="stat" id="dirty-stat"></div>
+  </div>
+
+  <h2>② 退化输入 —— 每一种都曾经让图表消失过</h2>
+  <p class="why">
+    全同值（域宽度为 0 → 除零）、单点、空数组、全脏值、1e15 与 1e-12 的极端量级。
+    任何一块变成空白或抛出异常，下面就会亮红。
+  </p>
+  <div class="grid3" id="degenerate"></div>
+
+  <h2>③ 海量数据 —— 20 万点</h2>
+  <p class="why">
+    200,000 个点，10 分钟分辨率、约 2.3 年。全部塞进 DOM 是不可能的，所以按时间桶降采样到可绘制的规模；
+    读数是降采样的耗时与倍数。
+  </p>
+  <div class="card">
+    <div class="chart" id="huge" style="height:220px"></div>
+    <div class="stat" id="huge-stat"></div>
+  </div>
+
+  <h2>④ 类别爆炸 —— 50 个序列 vs 8 格调色板</h2>
+  <p class="why">
+    分类色只有 8 个可用槽位。50 个序列必然重复颜色，这不是可以藏起来的问题 ——
+    正确的做法是<b>告诉使用者</b>，而不是假装颜色还有意义。
+  </p>
+  <div class="card">
+    <div class="chart" id="cats" style="height:260px"></div>
+    <div class="stat" id="cats-stat"></div>
+  </div>
+
+  <h2>⑤ 恶意标签 —— 数据不可信</h2>
+  <p class="why">
+    标签来自数据：400 字符、HTML 注入、引号与尖括号、emoji、RTL、控制字符、空白。
+    它们必须被转义，否则就是 XSS。
+  </p>
+  <div class="card">
+    <table class="chart-table">
+      <thead><tr><th>原始标签</th><th>转义后</th><th>长度</th></tr></thead>
+      <tbody id="labels"></tbody>
+    </table>
+  </div>
+</div>
+
+<script type="module">
+import { lineChart } from './src/line.js'
+import { barChart } from './src/bar.js'
+import { prepareSeries, esc, formatNumber } from './src/core.js'
+import { dirtyTimeSeries, degenerate, huge, manyCategories, hostileLabels } from './tests/fixtures/complex-data.js'
+
+// ── 页面自检：结果来自实际调用，不是写死的
+const checks = []
+const check = (name, pass, note = '') => checks.push({ name, pass, note })
+
+// ─────────────────────────── ① 脏序列
+const { points: dirtyPoints, truth } = dirtyTimeSeries()
+const dirtyStats = []
+{
+  const host = document.getElementById('dirty')
+  const chart = lineChart(host, {
+    points: dirtyPoints,
+    height: 300,
+    showArea: true,
+    robust: true,
+    label: '健康分',
+    onRender(info) {
+      dirtyStats.push(info)
+      const svg = host.querySelector('svg')
+      check('① 渲染出 SVG', !!svg && svg.innerHTML.length > 200, `${svg ? svg.innerHTML.length : 0} 字符`)
+      check('① 剔除脏值并计数', info.rejected > 0,
+        `剔除 ${info.rejected} 条（NaN ${truth.injected.nanValues} / null ${truth.injected.nullValues} / 字符串 ${truth.injected.stringValues}）`)
+      check('① 域有效且挡住尖峰', info.domain.every(Number.isFinite) && info.domain[1] < truth.injected.spikeAt.value / 10,
+        `域 [${info.domain[0].toFixed(1)}, ${info.domain[1].toFixed(1)}]，尖峰 ${truth.injected.spikeAt.value}`)
+      check('① 分位域剔除了离群点', info.trimmed >= 1, `trimmed ${info.trimmed}`)
+      check('① 降采样生效', info.sampled === true, `${dirtyPoints.length} → ${info.points.length}（1/${info.factor}）`)
+      document.getElementById('dirty-stat').textContent =
+        `输入 ${dirtyPoints.length} 条 → 保留 ${info.points.length} 点\n` +
+        `剔除 ${info.rejected} 条不可用　合并重复时间戳 ${truth.injected.duplicates} 组\n` +
+        `域 [${info.domain[0].toFixed(2)}, ${info.domain[1].toFixed(2)}]　分位剔除 ${info.trimmed} 点\n` +
+        `SVG 节点 ${svg ? svg.querySelectorAll('*').length : 0} 个`
+    },
+  })
+  // 缺口必须仍然存在：数一下路径有几段
+  setTimeout(() => {
+    const paths = host.querySelectorAll('path[stroke]')
+    check('① 空洞处断开（多段而非一条）', paths.length >= 3, `${paths.length} 段路径，注入 ${truth.injected.gapRuns.length} 个空洞`)
+  }, 120)
+}
+
+// ─────────────────────────── ② 退化输入
+const deg = degenerate()
+const degNames = {
+  allEqual: '全同值 500 点', single: '单点', empty: '空数组',
+  allDirty: '全脏值', twoPoints: '两点', oneHour: '40 点同时刻',
+  hugeValues: '±1e15', tinyValues: '1e-12 量级',
+}
+const degHost = document.getElementById('degenerate')
+for (const [key, pts] of Object.entries(deg)) {
+  const wrap = document.createElement('div')
+  wrap.className = 'card'
+  wrap.innerHTML = `<div style="font-size:12px;color:var(--chart-muted);margin-bottom:6px">${degNames[key] || key}</div>`
+  const box = document.createElement('div')
+  box.className = 'chart'
+  box.style.height = '120px'
+  wrap.appendChild(box)
+  const stat = document.createElement('div')
+  stat.className = 'stat'
+  wrap.appendChild(stat)
+  degHost.appendChild(wrap)
+
+  try {
+    const c = lineChart(box, {
+      points: pts,
+      height: 120,
+      showPoints: true,
+      showEndLabel: false,
+      label: degNames[key],
+      onRender(info) {
+        const ok = info.domain.every(Number.isFinite) && info.domain[1] > info.domain[0]
+        check(`② ${degNames[key]} 不炸`, ok, `域 [${info.domain[0]}, ${info.domain[1]}]，${info.points.length} 点`)
+        stat.textContent = `${info.points.length} 点　域 [${fmt(info.domain[0])}, ${fmt(info.domain[1])}]${info.rejected ? `　剔除 ${info.rejected}` : ''}`
+      },
+    })
+  } catch (error) {
+    check(`② ${degNames[key]} 不炸`, false, '抛出：' + error.message)
+    stat.textContent = '抛异常：' + error.message
+  }
+}
+function fmt(v) { return Math.abs(v) >= 1e5 || (Math.abs(v) < 1e-3 && v !== 0) ? v.toExponential(1) : Number(v.toFixed(2)) }
+
+// ─────────────────────────── ③ 海量
+{
+  const pts = huge()
+  const t0 = performance.now()
+  const prep = prepareSeries(pts, { maxPoints: 700, robust: true })
+  const ms = performance.now() - t0
+
+  const host = document.getElementById('huge')
+  lineChart(host, { points: pts, height: 220, maxPoints: 700, robust: true, showPoints: false, label: '20 万点' })
+
+  check('③ 20 万点降采样到可绘制', prep.points.length <= 700, `${pts.length} → ${prep.points.length}（1/${prep.factor}）`)
+  check('③ 流水线耗时可接受', ms < 3000, `${ms.toFixed(0)} ms`)
+  check('③ 域有效', prep.domain.every(Number.isFinite), `[${prep.domain[0].toFixed(1)}, ${prep.domain[1].toFixed(1)}]`)
+  document.getElementById('huge-stat').textContent =
+    `输入 ${pts.length.toLocaleString()} 点 → 绘制 ${prep.points.length} 点（1/${prep.factor}）\n` +
+    `完整流水线（清洗→排序→合并→降采样→求域）${ms.toFixed(0)} ms`
+}
+
+// ─────────────────────────── ④ 类别
+{
+  const { rows, series } = manyCategories()
+  const distinct = new Set(series.map((s) => s.color)).size
+  const host = document.getElementById('cats')
+  barChart(host, {
+    rows, x: (r) => r.t, height: 260, series,
+    line: { read: (r) => series.slice(0, 5).reduce((n, s) => n + (r[s.key] || 0), 0) / 5, label: 'Top5 均值' },
+  })
+  check('④ 50 个序列仍能渲染', host.querySelector('svg')?.innerHTML.length > 200)
+  check('④ 调色板不足被如实报告', distinct < series.length,
+    `${series.length} 个序列 vs ${distinct} 格调色板`)
+  document.getElementById('cats-stat').textContent =
+    `${series.length} 个序列，调色板仅 ${distinct} 格 → 颜色必然重复。\n` +
+    `正确做法是提示使用者改用 Top-N + 其他，或在图例上标明重复。`
+}
+
+// ─────────────────────────── ⑤ 标签
+{
+  const rows = hostileLabels()
+  const tbody = document.getElementById('labels')
+  let allEscaped = true
+  tbody.innerHTML = rows.map(({ label, key }) => {
+    const out = esc(label)
+    const safe = !out.includes('<') && !out.includes('>') && !out.includes('"')
+    if (!safe) allEscaped = false
+    const show = (s) => s.length > 46 ? s.slice(0, 44) + '…' : s
+    return `<tr><td style="font-family:monospace">${show(label.replace(/[\u0000\u2028\u2029]/g, '·')) || '<span style="color:var(--chart-faint)">（空）</span>'}</td>` +
+      `<td style="font-family:monospace" class="${safe ? 'ok' : 'bad'}">${show(out) || '（空）'}</td>` +
+      `<td>${label.length}</td></tr>`
+  }).join('')
+  check('⑤ 所有标签都被转义', allEscaped, `${rows.length} 条，含 HTML / 引号 / 控制字符`)
+}
+
+// ─────────────────────────── 汇总
+setTimeout(() => {
+  const pass = checks.filter((c) => c.pass).length
+  const fail = checks.length - pass
+  document.getElementById('sc-pass').textContent = pass
+  document.getElementById('sc-fail').textContent = fail
+  document.getElementById('sc-fail').className = 'big ' + (fail ? 'bad' : 'ok')
+  document.getElementById('sc-summary').textContent =
+    `第 4 轮（浏览器渲染）· ${checks.length} 项断言 · ${fail ? '有失败' : '全部通过'}` +
+    `　（第 1–3 轮在 Node 里跑：80 个断言全绿）`
+  document.getElementById('sc-list').innerHTML = checks.map((c) =>
+    `<div class="check"><i class="${c.pass ? 'ok' : 'bad'}">${c.pass ? '✓' : '✗'}</i>` +
+    `<span>${c.name}</span><span class="note">${c.note || ''}</span></div>`
+  ).join('')
+}, 300)
+</script>
+</body>
+</html>

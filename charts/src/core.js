@@ -375,7 +375,92 @@ export function downsample(points, max = 700, timeOf = (p) => p.key ?? p.t ?? p.
   return { points: out, sampled: true, factor }
 }
 
-// ────────────────────────────────────────────────────────────── formatting
+// ────────────────────────────────────────────────────────────── pipeline
+
+/**
+ * The full data pipeline every series chart runs, as one pure function.
+ *
+ * Round 1 of testing found this living inside the renderer's closure, where it
+ * could not be reached by a test. That is the whole reason it now sits here:
+ * a chart's data handling is the part most likely to be wrong and the part
+ * hardest to eyeball, so it must be callable without a DOM.
+ *
+ * Order matters and is not arbitrary:
+ *   sanitize   – drop values that are not finite, and count them
+ *   sort       – the input order is not trustworthy
+ *   collapse   – duplicate timestamps average rather than fight for position
+ *   downsample – only after collapsing, or buckets would be skewed by dupes
+ *   domain     – fitted or zero-based, never degenerate
+ *
+ * @param {Array<{t:number,value:number}>} input
+ * @param {object} [options]
+ * @param {number} [options.maxPoints=700]
+ * @param {boolean} [options.zeroBased=false]  true for bars, false for lines
+ * @param {boolean} [options.robust=false]     trim outliers (fitted domains only)
+ * @param {number} [options.trimLow=0.01]
+ * @param {number} [options.trimHigh=0.99]
+ * @param {(v:number)=>number} [options.floor] optional lower clamp (0 for counts)
+ */
+export function prepareSeries(input, options = {}) {
+  const list = Array.isArray(input) ? input : []
+  const maxPoints = Math.max(1, num(options.maxPoints, 700))
+
+  const clean = sanitize(list, {
+    t: (p) => p && p.t,
+    value: (p) => p && p.value,
+  })
+
+  const sorted = sortedBy(clean.rows, (p) => p.t)
+  const collapsedAll = collapseBy(sorted, (p) => p.t, (p) => p.value)
+    .map((c) => ({ t: c.key, value: options.floor ? options.floor(c.value) : c.value, n: c.n }))
+
+  const down = downsample(collapsedAll, maxPoints, (p) => p.t)
+  const points = down.points
+
+  let domain = [0, 1]
+  let trimmed = 0
+  if (points.length) {
+    const values = points.map((p) => p.value)
+    if (options.zeroBased) {
+      domain = zeroBasedDomain(values)
+    } else if (options.robust) {
+      const r = robustDomain(values, {
+        low: num(options.trimLow, 0.01),
+        high: num(options.trimHigh, 0.99),
+      })
+      domain = r.domain
+      trimmed = r.trimmed
+    } else {
+      const lo = Math.min(...values)
+      const hi = Math.max(...values)
+      const pad = (hi - lo) * 0.12
+      domain = (hi - lo > 1e-12) ? [lo - pad, hi + pad] : [lo - 1, hi + 1]
+    }
+  }
+
+  return {
+    points,
+    domain,
+    /** How many input rows were unusable, and why. Surface this to the user. */
+    rejected: clean.rejected,
+    reasons: clean.reasons,
+    /** Duplicate timestamps that were merged. */
+    merged: collapsedAll.length < sorted.length,
+    collapsed: collapsedAll.length,
+    sampled: down.sampled,
+    factor: down.factor,
+    trimmed,
+    empty: points.length === 0,
+  }
+}
+
+/** True when a series has holes big enough that a continuous line would lie. */
+export function seriesHasGaps(points, options = {}) {
+  const list = Array.isArray(points) ? points : []
+  if (list.length < 3) return false
+  return gapIndices(list.map((p) => p.t), options).length > 0
+}
+
 
 /**
  * Human-readable numbers.
@@ -384,6 +469,8 @@ export function downsample(points, max = 700, timeOf = (p) => p.key ?? p.t ?? p.
  * a raw debug print, and three decimal places on a count implies a precision
  * the data does not have.
  */
+// ────────────────────────────────────────────────────────────── formatting
+
 export function formatNumber(v, { decimals = null, compact = false, prefix = '', suffix = '' } = {}) {
   if (!isNum(v)) return '—'
   const abs = Math.abs(v)

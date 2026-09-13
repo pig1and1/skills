@@ -14,9 +14,8 @@
  *     scaling (which is how the plot fills a responsive box) cannot distort text.
  */
 import {
-  isNum, num, linearScale, niceTicks, robustDomain,
-  sanitize, sortedBy, collapseBy, gapIndices, splitAt, downsample,
-  formatNumber, formatDate, plotArea,
+  isNum, num, linearScale, niceTicks, formatNumber, formatDate, plotArea,
+  prepareSeries, gapIndices, splitAt,
   esc, px, linePath, areaPath,
 } from './core.js'
 
@@ -77,20 +76,18 @@ export function lineChart(host, options = {}) {
     return num(state.height, 260)
   }
 
-  /** Pure: rows -> plot-ready points, after hygiene, sort, dedup, downsample. */
+  /**
+   * Pure: rows -> plot-ready points. Delegates to core's pipeline, which is the
+   * part that must be testable -- it used to live here in a closure and had no
+   * coverage at all.
+   */
   function prepare() {
-    const raw = Array.isArray(state.points) ? state.points : []
-    const clean = sanitize(raw, { t: (p) => p && p.t, value: (p) => p && p.value })
-    const sorted = sortedBy(clean.rows, (p) => p.t)
-    const collapsed = collapseBy(sorted, (p) => p.t, (p) => p.value)
-      .map((e) => ({ t: e.key, value: e.value, n: e.n }))
-    const down = downsample(collapsed, num(state.maxPoints, 700), (p) => p.t)
-    return {
-      points: down.points,
-      sampled: down.sampled,
-      rejected: clean.rejected,
-      reasons: clean.reasons,
-    }
+    return prepareSeries(state.points, {
+      maxPoints: num(state.maxPoints, 700),
+      zeroBased: state.yFromZero === true,
+      robust: state.yFromZero !== true,
+      floor: state.clampAtZero === true ? (v) => Math.max(0, v) : undefined,
+    })
   }
 
   function draw() {
@@ -116,15 +113,10 @@ export function lineChart(host, options = {}) {
       return
     }
 
-    const values = pts.map((p) => p.value)
-    let lo, hi, trimmed = 0
-    if (state.yFromZero) { lo = 0; hi = Math.max(...values) * 1.12 || 1 }
-    else {
-      const r = robustDomain(values)
-      lo = r.domain[0]; hi = r.domain[1]; trimmed = r.trimmed
-    }
-    // A degenerate band must still produce a finite scale.
-    if (!(hi - lo > 1e-12)) { lo -= 1; hi += 1 }
+    // The domain comes from the pipeline, so exactly one place decides
+    // fitted-vs-zero-based, and one place guards against degeneracy.
+    const [lo, hi] = prep.domain
+    const trimmed = prep.trimmed
 
     const area = plotArea(w, h, pad)
     const xs = linearScale([pts[0].t, pts[pts.length - 1].t], [area.x, area.x + area.width])
