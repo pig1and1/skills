@@ -1,6 +1,6 @@
 ---
 name: frontend-tables-and-charts
-description: Use when building or restyling a frontend data table OR chart — column widths, alignment, row density, sticky headers, hover/selection/focus states, virtual scrolling, theme tokens, sparklines, line/bar/area charts, axis ranges and baselines, chart sizing, DPR-correct canvas — or when diagnosing table jitter, drifting columns, scroll jump-back, layout shift after a chart loads, blurry charts, or misleading axes. 触发场景：前端表格 / 数据网格 / 图表（折线、柱状、面积、迷你图）的样式与交互实现或改造，尤其是列宽跳动、滚动抖动、粘性表头错位、大列表卡顿、图表加载后页面跳动、高分屏模糊、Y 轴误导，以及"表格或图表不好看、不简洁"这类要求。
+description: Use when building or restyling a frontend data table OR chart — column widths, alignment, row density, sticky headers, hover/selection/focus states, virtual scrolling, theme tokens, sparklines, line/bar/area charts, axis ranges and baselines, chart sizing, DPR-correct canvas — or when a page-level data region's four states (not-yet-queried / loading / empty / failed) are conflated or not announced to assistive tech, or a grid or flex child is being burst open by wide contents such as a table — or when diagnosing table jitter, drifting columns, scroll jump-back, layout shift after a chart loads, blurry charts, or misleading axes. 触发场景：前端表格 / 数据网格 / 图表（折线、柱状、面积、迷你图）的样式与交互实现或改造，尤其是列宽跳动、滚动抖动、粘性表头错位、大列表卡顿、图表加载后页面跳动、高分屏模糊、Y 轴误导；也覆盖页面级数据区的四种状态（未查询 / 加载中 / 无结果 / 失败）分不清或没播报给辅助技术、栅格被表格或长日志撑破，以及"表格或图表不好看、不简洁"这类要求。
 ---
 
 # 前端表格与图表：好看、简洁、稳定、快
