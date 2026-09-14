@@ -90,6 +90,44 @@ table.data-table {
   outline-offset: -2px;
 }
 
+/* ---- frozen first column ----------------------------------------------- */
+
+/* Skill §1: once a wide table scrolls sideways, the row's identity scrolls
+ * away with it — the sticky header pins what the columns mean, nobody pins
+ * which row you are looking at. Put .col-id on every cell of column one,
+ * header included. Four things are needed; any one missing is visible.
+ *
+ * ⚠️ This block was added on 2026-09-14. Until then §1 stated the rule while
+ * NO reference implementation demonstrated it — and the body claimed three of
+ * them did. See evidence.md, "这个 skill 自己踩过的坑". */
+.data-table .col-id {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  /* 1. Opaque — a transparent sticky cell lets the cells scrolling under it
+   *    show through. Use the table's resting background; if your app has no
+   *    such token, add one rather than hard-coding a hex here. */
+  background: var(--table-bg, Canvas);
+  /* 2. A right edge, or the frozen cell merges with the one sliding beneath. */
+  box-shadow: inset -1px 0 0 var(--table-border);
+}
+
+/* 3. Above the sticky header (z-index 2), or the header covers the corner
+ *    where the frozen column and the sticky header meet. */
+.data-table thead .col-id {
+  z-index: 3;
+}
+
+/* 4. The opaque background in (1) hides the row's own background, so the
+ *    frozen cell has to carry the row states itself. Without these two,
+ *    hovering or selecting a row repaints every cell except this one. */
+.data-table tbody tr:hover .col-id {
+  background: var(--table-row-hover);
+}
+.data-table tbody tr[aria-selected='true'] .col-id {
+  background: var(--table-row-selected);
+}
+
 /* ---- cell modifiers ---------------------------------------------------- */
 
 /* Apply to numeric columns. */
