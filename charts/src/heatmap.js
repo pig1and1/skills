@@ -653,8 +653,13 @@ export function heatmapChart(host, options = {}) {
 
     // Narrow cells mean the column labels cannot sit side by side at full length;
     // rotating them keeps every label rather than dropping every other one.
+    // Past a couple of dozen columns even rotated labels read as a smear, so
+    // thin them out: the cell tooltip still names its exact column.
     const rotate = prep.colCount > 6 && cs.band < 46
+    const labelEvery = prep.colCount > 12 && cs.band < 30
+      ? Math.ceil(prep.colCount / 12) : 1
     colLab.innerHTML = prep.colLabels.map((lab, c) => {
+      if (labelEvery > 1 && c % labelEvery !== 0) return ''
       const left = prep.colCount ? (cs.center(c) / w) * 100 : 0
       const shape = rotate
         ? 'transform:translateX(-50%) rotate(-45deg);transform-origin:center;white-space:nowrap;'

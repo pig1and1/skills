@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>服务健康度 · dsh-charts 展示</title>
+<link rel="stylesheet" href="./src/theme.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+
+  /* 深色模式不是把浅色反转，而是另选一套：降饱和、拉开明度。 */
+  :root {
+    --page: #f6f7f9;
+    --card: #ffffff;
+    --hair: rgba(22, 24, 29, .10);
+    --hair-soft: rgba(22, 24, 29, .06);
+    --ink: #16181d;
+    --ink-2: #3d434f;
+    --muted: #6c7484;
+    --good: #15803d;
+    --bad: #b91c1c;
+    --accent: #c2410c;
+    --accent-soft: rgba(194, 65, 12, .10);
+    --sunken: #f7f8fa;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0e0f12;
+      --card: #15171c;
+      --hair: rgba(242, 243, 246, .12);
+      --hair-soft: rgba(242, 243, 246, .07);
+      --ink: #f2f3f6;
+      --ink-2: #c5c9d3;
+      --muted: #8b91a0;
+      --good: #4ade80;
+      --bad: #f87171;
+      --accent: #fb923c;
+      --accent-soft: rgba(251, 146, 60, .12);
+      --sunken: #101216;
+    }
+  }
+
+  html, body { margin: 0; }
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font: 14px/1.55 system-ui, -apple-system, "Segoe UI", "Noto Sans SC", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    padding: 22px 20px 56px;
+  }
+  .wrap { max-width: 1240px; margin: 0 auto; }
+
+  /* ---- header ---- */
+  header { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+  h1 { font-size: 17px; margin: 0; letter-spacing: -.01em; }
+  .sub { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+  .spacer { flex: 1 1 auto; }
+  .seg { display: inline-flex; border: 1px solid var(--hair); border-radius: 8px; overflow: hidden; }
+  .seg button {
+    appearance: none; border: 0; background: transparent; color: var(--muted);
+    font: inherit; font-size: 12.5px; padding: 6px 11px; cursor: pointer;
+  }
+  .seg button + button { border-left: 1px solid var(--hair); }
+  .seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+
+  /* ---- KPI ---- */
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px; }
+  .kpi {
+    background: var(--card); border: 1px solid var(--hair); border-radius: 11px;
+    padding: 13px 15px 12px;
+  }
+  .kpi .k { color: var(--muted); font-size: 11.5px; letter-spacing: .02em; }
+  .kpi .v {
+    font-size: 26px; font-weight: 620; letter-spacing: -.02em; margin-top: 5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .kpi .d { font-size: 11.5px; margin-top: 3px; color: var(--muted); }
+  .kpi .d.up { color: var(--bad); }
+  .kpi .d.down { color: var(--good); }
+
+  /* ---- cards ---- */
+  .grid { display: grid; gap: 12px; margin-bottom: 12px; }
+  .g-2 { grid-template-columns: 1fr 1fr; }
+  .g-32 { grid-template-columns: 3fr 2fr; }
+  .card {
+    background: var(--card); border: 1px solid var(--hair); border-radius: 11px;
+    padding: 13px 15px 14px; min-width: 0;
+  }
+  .card h2 {
+    font-size: 11.5px; margin: 0 0 10px; color: var(--muted);
+    font-weight: 620; letter-spacing: .05em; text-transform: uppercase;
+  }
+  .card h2 .hint { text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--muted); }
+  .host { position: relative; }
+
+  /* ---- table ---- */
+  .table-scroll {
+    scrollbar-gutter: stable;          /* 滚动条出现时不抖 */
+    overflow: auto; max-height: 340px;
+    contain: layout paint;
+  }
+  table.dt {
+    table-layout: fixed;               /* 列宽只由 colgroup 决定，绝不测量内容 */
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+  }
+  .dt caption { text-align: left; color: var(--muted); font-size: 12px; padding: 0 0 8px; }
+  .dt th, .dt td {
+    height: 48px; padding: 12px 16px;   /* 常规密度：见 skill §2 */
+    text-align: left; border: 0; vertical-align: middle;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .dt thead th {
+    position: sticky; top: 0; z-index: 2;
+    background: var(--card);            /* 粘性表头必须不透明 */
+    box-shadow: inset 0 -1px 0 var(--hair);
+    color: var(--muted); font-size: 11.5px; font-weight: 620;
+    letter-spacing: .03em; text-transform: uppercase;
+  }
+  .dt tbody tr { box-shadow: inset 0 -1px 0 var(--hair-soft); }
+  .dt tbody tr:hover { background: var(--sunken); }
+  .dt .num { text-align: right; }
+  .dt .flag { font-size: 11.5px; color: var(--muted); }
+
+  .pill {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font-size: 11.5px; font-weight: 560; line-height: 1.6;
+  }
+  .pill.ok { background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); }
+  .pill.warn { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+  .pill.miss { background: var(--sunken); color: var(--muted); border: 1px dashed var(--hair); }
+  .pill.bad { background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--bad); }
+
+  .foot { color: var(--muted); font-size: 12px; margin-top: 14px; line-height: 1.7; }
+  .foot code { background: var(--sunken); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+
+  @media (max-width: 980px) {
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .g-2, .g-32 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>服务健康度</h1>
+      <div class="sub">最近 30 天 · 数据含真实脏值 · 悬停任意图形即可读数，无需点击</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="seg" role="group" aria-label="主题">
+      <button data-theme="auto" aria-pressed="true">跟随系统</button>
+      <button data-theme="light" aria-pressed="false">浅色</button>
+      <button data-theme="dark" aria-pressed="false">深色</button>
+    </div>
+  </header>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="grid g-32">
+    <div class="card">
+      <h2>请求量 <span class="hint">· 柱为每日请求，线为 7 日均值（同量纲，共用从 0 起的轴）</span></h2>
+      <div class="host" id="c-load"></div>
+    </div>
+    <div class="card">
+      <h2>错误率 <span class="hint">· 折线只表达位置，不必从 0</span></h2>
+      <div class="host" id="c-err"></div>
+    </div>
+  </div>
+
+  <div class="grid g-2">
+    <div class="card">
+      <h2>响应耗时 vs 并发 <span class="hint">· 600 个请求；重合点已聚合，悬停显示重合数</span></h2>
+      <div class="host" id="c-scatter"></div>
+    </div>
+    <div class="card">
+      <h2>耗时分布 <span class="hint">· 双峰；箱数按 Freedman–Diaconis 自适应</span></h2>
+      <div class="host" id="c-hist"></div>
+    </div>
+  </div>
+
+  <div class="grid g-2">
+    <div class="card">
+      <h2>错误按小时分布 <span class="hint">· 顺序色阶（单一色相，深浅有序）</span></h2>
+      <div class="host" id="c-heat"></div>
+    </div>
+    <div class="card">
+      <h2>各接口耗时对比 <span class="hint">· 箱线图编码位置与离散度，不从 0</span></h2>
+      <div class="host" id="c-box"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>每日明细 <span class="hint">· 表格给精确值，图表给形状</span></h2>
+    <div class="table-scroll" tabindex="0">
+      <table class="dt">
+        <caption>最近 14 天，按日期倒序。标「—」的是缺失，标「不可信」的是脏值。</caption>
+        <colgroup>
+          <col style="width: 118px">
+          <col style="width: 104px">
+          <col style="width: 104px">
+          <col style="width: 96px">
+          <col style="width: 112px">
+          <col>
+        </colgroup>
+        <thead>
+          <tr>
+            <th scope="col">日期</th>
+            <th scope="col" class="num">请求数</th>
+            <th scope="col" class="num">错误数</th>
+            <th scope="col" class="num">错误率</th>
+            <th scope="col" class="num">P95 耗时</th>
+            <th scope="col">状态</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <p class="foot" id="foot"></p>
+
+</div>
+
+<script type="module">
+import { lineChart } from './src/line.js'
+import { barChart } from './src/bar.js'
+import { scatterChart } from './src/scatter.js'
+import { histogramChart } from './src/histogram.js'
+import { heatmapChart } from './src/heatmap.js'
+import { boxplotChart } from './src/boxplot.js'
+
+const DAY = 86400000
+const T0 = Date.parse('2026-08-16T00:00:00Z')
+
+let _s = 11
+const rnd = () => (_s = (_s * 1103515245) % 2147483647) / 2147483647
+
+/* ---- 造一份带真实脏值的数据 -------------------------------------------
+   故意混入：缺失日（null）、坏字符串（'18,540'）、非数值（'N/A'）、
+   逻辑矛盾（错误数 > 请求数）、负值、以及两段时间缺口。 */
+const DAYS = 30
+const raw = []
+for (let i = 0; i < DAYS; i++) {
+  const t = T0 + i * DAY
+  const weekend = [0, 6].includes(new Date(t).getUTCDay())
+  const base = weekend ? 7400 : 13800
+  const req = Math.round(base + (rnd() - 0.5) * 2600 + i * 46)
+  const errRate = weekend ? 0.018 : 0.032
+  const err = Math.round(req * errRate * (0.55 + rnd() * 0.9))
+  const p95 = Math.round(148 + (rnd() - 0.5) * 46 + (weekend ? -22 : 0))
+  raw.push({ t, req, err, p95 })
+}
+// 缺失：整日无上报
+raw[4] = null
+raw[17] = null
+// 坏字符串：千分位是展示层格式化的痕迹，应拒绝
+raw[9] = { t: T0 + 9 * DAY, req: '18,540', err: 522, p95: 161 }
+// 非数值
+raw[13] = { t: T0 + 13 * DAY, req: 14102, err: 'N/A', p95: 155 }
+// 逻辑矛盾：错误数 > 请求数 → 该字段不可信，但不要丢掉整条
+raw[21] = { t: T0 + 21 * DAY, req: 12980, err: 13022, p95: 170 }
+// 负值：物理上不可能
+raw[25] = { t: T0 + 25 * DAY, req: 12640, err: -8, p95: 152 }
+
+/* ---- 字段级清洗：不丢整条记录，只把坏字段判缺位并说明原因 ---- */
+const reasons = new Map()
+const num = (v) => {
+  if (typeof v === 'number' && Number.isFinite(v)) return v
+  if (typeof v === 'string' && /^\d+(\.\d+)?$/.test(v.trim())) return Number(v)
+  return null
+}
+const notes = []
+const clean = []
+for (const row of raw) {
+  if (!row) { notes.push('1 天无上报（按漏报处理，不补 0）'); continue }
+  const req = num(row.req), err = num(row.err), p95 = num(row.p95)
+  const flagged = []
+  if (req === null || req < 0) flagged.push('请求数')
+  if (err === null || err < 0) flagged.push('错误数')
+  if (p95 === null || p95 < 0) flagged.push('P95')
+  // 逻辑矛盾单列：不是"缺"，是"不可信"
+  const contradictory = err !== null && req !== null && err > req
+  if (contradictory) flagged.push('错误数(>请求数)')
+  clean.push({
+    t: row.t,
+    req: req !== null && req >= 0 ? req : null,
+    err: err !== null && err >= 0 && !contradictory ? err : null,
+    p95: p95 !== null && p95 >= 0 ? p95 : null,
+    flagged, contradictory,
+  })
+}
+
+const day = (t) => new Date(t).toISOString().slice(5, 10)
+const fmt = (v, d = 0) => v === null || v === undefined ? '—'
+  : v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })
+
+/* ---- KPI ---- */
+const okRows = clean.filter(r => r.req !== null)
+const totalReq = okRows.reduce((s, r) => s + r.req, 0)
+const okErrRows = clean.filter(r => r.err !== null && r.req !== null)
+const totalErr = okErrRows.reduce((s, r) => s + r.err, 0)
+const errRate = totalErr / okRows.reduce((s, r) =>
+  s + (r.err !== null ? r.req : 0), 0)
+const p95s = clean.map(r => r.p95).filter(v => v !== null).sort((a, b) => a - b)
+const p95Avg = p95s.reduce((s, v) => s + v, 0) / p95s.length
+const gapDays = clean.length !== DAYS ? DAYS - clean.length : 0
+
+const kpis = [
+  { k: '总请求', v: fmt(totalReq), d: `${okRows.length} 天有数据`, cls: '' },
+  { k: '错误率', v: (errRate * 100).toFixed(2) + '%', d: '阈值 3%', cls: errRate > 0.03 ? 'up' : 'down' },
+  { k: '平均 P95', v: fmt(p95Avg) + 'ms', d: '阈值 350ms', cls: p95Avg > 350 ? 'up' : 'down' },
+  { k: '数据缺口', v: String(gapDays + 1), d: '含 1 天无上报', cls: '' },
+]
+document.getElementById('kpis').innerHTML = kpis.map(x => `
+  <div class="kpi">
+    <div class="k">${x.k}</div>
+    <div class="v">${x.v}</div>
+    <div class="d ${x.cls}">${x.d}</div>
+  </div>`).join('')
+
+/* ---- 柱状 + 7 日均线（同量纲，共用一条从 0 起的轴）---- */
+const barRows = clean.map(r => ({
+  t: r.t,
+  req: r.req,
+  avg: r.req === null ? null : null,   // 占位，下面单独算
+}))
+// 7 日均值：窗口内样本不足就不推断（缺失日不参与，也不跳过它去凑数）
+for (let i = 0; i < barRows.length; i++) {
+  const win = clean.slice(Math.max(0, i - 6), i + 1).map(r => r.req).filter(v => v !== null)
+  barRows[i].avg = win.length >= 4 && clean[i].req !== null
+    ? win.reduce((s, v) => s + v, 0) / win.length
+    : null
+}
+barChart(document.getElementById('c-load'), {
+  rows: barRows.filter(r => r.req !== null),
+  x: r => r.t, height: 232,
+  series: [{ key: 'req', label: '请求数', color: 'var(--chart-cat-2)' }],
+  line: { read: r => r.avg, label: '7 日均值' },
+  formatY: v => v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v),
+})
+
+/* ---- 错误率折线（只表达位置，不必从 0；缺口断开）---- */
+const errPoints = clean
+  .filter(r => r.err !== null && r.req !== null)
+  .map(r => ({ t: r.t, value: +(r.err / r.req * 100).toFixed(2) }))
+lineChart(document.getElementById('c-err'), {
+  points: errPoints, height: 232, label: '错误率',
+  formatY: v => v.toFixed(1) + '%',
+})
+
+/* ---- 散点：耗时 vs 并发，故意过度绘制 ---- */
+const scatterPts = []
+for (let i = 0; i < 600; i++) {
+  const conc = 40 + rnd() * 240
+  scatterPts.push({
+    x: conc,
+    y: Math.round(96 + conc * 0.42 + (rnd() - 0.5) * 62 + (rnd() < 0.04 ? 210 : 0)),
+    label: '请求样本',
+  })
+}
+scatterChart(document.getElementById('c-scatter'), {
+  points: scatterPts, height: 232,
+  xLabel: '并发', yLabel: '耗时', yUnit: 'ms',
+})
+
+/* ---- 直方图：双峰 ---- */
+const histVals = []
+for (let i = 0; i < 1400; i++) {
+  histVals.push(Math.round(rnd() < 0.42
+    ? 110 + rnd() * 34
+    : 236 + rnd() * 58))
+}
+histogramChart(document.getElementById('c-hist'), {
+  values: histVals, height: 232, label: '耗时分布',
+  formatX: v => String(Math.round(v)),
+})
+
+/* ---- 热力图：7 天 × 24 小时，顺序色阶 ---- */
+const heatRows = []
+const WD = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+for (let d = 0; d < 7; d++) {
+  for (let h = 0; h < 24; h++) {
+    const peak = (h >= 9 && h <= 12) || (h >= 19 && h <= 22)
+    const spike = h === 3 && d < 3      // 凌晨批处理偶发
+    const v = Math.round(
+      (peak ? 26 : 5) * (d >= 5 ? 0.45 : 1) * (0.4 + rnd()) + (spike ? 48 : 0))
+    heatRows.push({ day: WD[d], hour: h, errors: v })
+  }
+}
+heatmapChart(document.getElementById('c-heat'), {
+  rows: heatRows, height: 232,
+  row: r => r.day, col: r => r.hour, value: r => r.errors,
+  rowAxis: '星期',
+})
+
+/* ---- 箱线图：各接口耗时 ---- */
+const boxGroups = ['/api/items', '/api/search', '/api/report'].map((label, gi) => {
+  const base = [118, 176, 342][gi]
+  const spread = [34, 62, 148][gi]
+  const vals = Array.from({ length: 80 }, () =>
+    Math.round(base + (rnd() - 0.5) * spread + (rnd() < 0.05 ? spread * 3.2 : 0)))
+  return { label, values: vals }
+})
+boxplotChart(document.getElementById('c-box'), {
+  groups: boxGroups, height: 232, label: '耗时',
+  formatValue: v => Math.round(v) + 'ms',
+})
+
+/* ---- 表格 ---- */
+const rowsHtml = clean.slice().reverse().map(r => {
+  const rate = r.err !== null && r.req ? (r.err / r.req * 100) : null
+  let pill = '<span class="pill ok">正常</span>'
+  if (r.flagged.length) {
+    pill = r.contradictory
+      ? '<span class="pill bad">错误数不可信</span>'
+      : `<span class="pill miss">缺失：${r.flagged.join('、')}</span>`
+  } else if (rate !== null && rate >= 3) {
+    pill = '<span class="pill warn">错误率偏高</span>'
+  }
+  return `<tr>
+    <td>${day(r.t)}</td>
+    <td class="num">${fmt(r.req)}</td>
+    <td class="num">${fmt(r.err)}</td>
+    <td class="num">${rate === null ? '—' : rate.toFixed(2) + '%'}</td>
+    <td class="num">${r.p95 === null ? '—' : fmt(r.p95) + 'ms'}</td>
+    <td>${pill}</td>
+  </tr>`
+}).join('')
+document.getElementById('tbody').innerHTML = rowsHtml
+
+/* ---- 脚注：把处置口径写在界面上，别让读者猜 ---- */
+const missingCells = clean.reduce((s, r) => s + r.flagged.length, 0)
+document.getElementById('foot').innerHTML =
+  `<strong>数据处置口径</strong>（都写在这里，而不是只写在代码里）：
+   剔除 ${gapDays + 1} 天无上报记录、按字段判缺位 ${missingCells} 项、拒绝 1 个千分位字符串
+   （<code>'18,540'</code> 是展示层格式化的痕迹，不是数值）、
+   1 天「错误数 &gt; 请求数」判为不可信但<strong>保留其请求数</strong>（不 clamp、不丢整条）。
+   缺口处折线<strong>断开</strong>而非连线 —— 一条连续的折线等于宣称"这期间一直如此"。
+   表格行高 <code>48px</code>、列宽由 <code>&lt;colgroup&gt;</code> 固定、数字列 <code>tabular-nums</code>。`
+
+/* ---- 主题切换：验证深浅两套而不用改系统设置 ---- */
+const mq = matchMedia('(prefers-color-scheme: dark)')
+let forced = null
+const seg = document.querySelector('.seg')
+function applyTheme() {
+  const dark = forced ? forced === 'dark' : mq.matches
+  document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+  // 图表颜色走 CSS token，切换主题后只需让它们重画
+  for (const id of ['c-load', 'c-err', 'c-scatter', 'c-hist', 'c-heat', 'c-box']) {
+    const host = document.getElementById(id)
+    const ev = new Event('resize')
+    window.dispatchEvent(ev)
+    host.dispatchEvent(ev)
+  }
+}
+seg.addEventListener('click', e => {
+  const b = e.target.closest('button')
+  if (!b) return
+  forced = b.dataset.theme === 'auto' ? null : b.dataset.theme
+  for (const x of seg.querySelectorAll('button')) {
+    x.setAttribute('aria-pressed', String(x === b))
+  }
+  applyTheme()
+})
+applyTheme()
+</script>
+</body>
+</html>

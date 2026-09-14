@@ -13,7 +13,7 @@
  *   node serve.js 4173        # in another terminal
  *   node browser-check.mjs
  *
- * Env: EDGE, CDP_PORT, PAGE, SHOTS=1
+ * Env: EDGE, CDP_PORT, PAGE, IDS, HOST_SEL, SHOTS=1
  */
 
 import { spawn } from 'node:child_process'
@@ -27,7 +27,11 @@ const EDGE = process.env.EDGE ||
 const PORT = Number(process.env.CDP_PORT || 9333)
 const PAGE = process.env.PAGE || 'http://127.0.0.1:4173/renderers.html'
 const SHOTS = process.env.SHOTS === '1'
-const IDS = ['line', 'bar', 'scatter', 'histogram', 'heatmap', 'boxplot']
+// Which renderers to probe, and the id prefix their host elements carry.
+// Defaults match renderers.html; override to check any other page, e.g.
+//   IDS=load,err,scatter,hist,heat,box node browser-check.mjs
+const IDS = (process.env.IDS || 'line,bar,scatter,histogram,heatmap,boxplot').split(',')
+const SEL = process.env.HOST_SEL || 'c-'
 
 const results = []
 let failures = 0
@@ -85,7 +89,7 @@ process.on('exit', cleanup)
  * here inspects the implementation: it dispatches a real MouseEvent and then
  * asks the browser what the computed display is. */
 const hoverProbe = (id) => `(async () => {
-  const host = document.getElementById('c-${id}')
+  const host = document.getElementById('${SEL}${id}')
   if (!host) return { found: false, why: 'no host element' }
   const svg = host.querySelector('svg')
   const tip = host.querySelector('.chart-tip')
@@ -162,39 +166,58 @@ try {
 
   await send('Page.navigate', { url: PAGE })
 
+  // A page may or may not expose a readiness hook -- do not require one.
+  // Fall back to "the document finished loading and something has been drawn",
+  // so this checker also works on pages that know nothing about it.
   let ready = false
   for (let i = 0; i < 100; i++) {
     await sleep(100)
-    try { ready = await evalJS('!!window.__ready') } catch { /* still loading */ }
+    try {
+      ready = await evalJS(`(function () {
+        if (window.__ready === true) return true
+        if (document.readyState !== 'complete') return false
+        return !!document.querySelector('svg path, svg rect, svg circle')
+      })()`)
+    } catch { /* still loading */ }
     if (ready) break
   }
-  check('page mounted all six renderers', ready === true,
-    ready ? '' : 'window.__ready never became true')
+  check(`page loaded and drew something`, ready === true,
+    ready ? '' : 'never ready: no window.__ready hook and nothing drawn')
   await sleep(300)
 
   // ---- every renderer drew something ------------------------------------
+  // The list comes from IDS, not from a page-provided hook, so the checker
+  // does not depend on the page cooperating with it.
   const mounts = await evalJS(`(() => {
-    const ids = window.__rendererIds || []
+    const ids = ${JSON.stringify(IDS)}
+    const sel = ${JSON.stringify(SEL)}
     return ids.map(id => {
-      const host = document.getElementById('c-' + id)
+      const host = document.getElementById(sel + id)
       const svg = host && host.querySelector('svg')
       const tip = host && host.querySelector('.chart-tip')
       const box = host ? host.getBoundingClientRect() : { width: 0, height: 0 }
       return {
         id,
+        hostFound: !!host,
         svg: !!svg,
         marks: svg ? svg.querySelectorAll('path,rect,circle,line,polyline').length : 0,
         texts: svg ? svg.querySelectorAll('text').length : 0,
         tipElement: !!tip,
         tipHiddenAtRest: tip ? getComputedStyle(tip).display === 'none' : null,
+        // Does the chart label its x axis at all? line.js and bar.js shipped
+        // without one, which left a time series unreadable without hovering.
+        xLabels: (() => {
+          const el = host && host.querySelector('.chart-xlab, .chart-collab')
+          return el ? (el.textContent || '').trim().length : 0
+        })(),
         w: Math.round(box.width),
         h: Math.round(box.height),
       }
     })
   })()`)
 
-  check('all six are present', mounts.length === 6,
-    `got ${mounts.length}: ${mounts.map(m => m.id).join(',')}`)
+  check(`all ${IDS.length} renderer hosts exist`, mounts.every(m => m.hostFound),
+    `missing: ${mounts.filter(m => !m.hostFound).map(m => m.id).join(',') || 'none'}`)
 
   for (const m of mounts) {
     check(`${m.id}: <svg> exists`, m.svg)
@@ -206,6 +229,8 @@ try {
     // Text must stay in the HTML overlay: the plot is scaled with
     // preserveAspectRatio="none", so SVG text would be stretched.
     check(`${m.id}: no <text> inside svg`, m.texts === 0, `texts=${m.texts}`)
+    check(`${m.id}: x axis is labelled`, m.xLabels > 0,
+      'no .chart-xlab/.chart-collab content -- the reader cannot tell what the x positions mean')
   }
 
   // ---- hover: the check no screenshot can make --------------------------
@@ -220,17 +245,25 @@ try {
   }
 
   // ---- programmatic pin, and a redraw that must not throw ----------------
+  // Optional: a page that does not expose window.__charts simply skips it,
+  // rather than throwing and cutting the rest of the run short.
+  let pinChecked = 0
   for (const id of IDS) {
     const r = await evalJS(`(() => {
-      const c = window.__charts['${id}']
-      if (!c) return { ok: false, why: 'not exposed' }
+      const c = (window.__charts || {})['${id}']
+      if (!c) return { skipped: true }
       try {
         if (typeof c.select === 'function') c.select(1)
         if (typeof c.update === 'function') c.update({})
         return { ok: true, api: Object.keys(c).sort().join(',') }
       } catch (e) { return { ok: false, why: String(e && e.message || e) } }
     })()`)
+    if (r.skipped) continue
+    pinChecked++
     check(`${id}: select()/update() do not throw`, r.ok, r.why || `api=${r.api}`)
+  }
+  if (!pinChecked) {
+    console.log('NOTE  select()/update() skipped: the page exposes no window.__charts')
   }
 
   // ---- both colour schemes, and hover must survive the flip -------------
@@ -240,8 +273,8 @@ try {
     await sleep(250)
     const bg = await evalJS('getComputedStyle(document.body).backgroundColor')
     check(`${scheme}: surface color resolves`, typeof bg === 'string' && bg.startsWith('rgb'), bg)
-    const r = await evalJS(hoverProbe('line'))
-    check(`${scheme}: hover still works`, r.found && r.display === 'block',
+    const r = await evalJS(hoverProbe(IDS[0]))
+    check(`${scheme}: hover still works after theme flip`, r.found && r.display === 'block',
       r.found ? `display=${r.display}` : r.why)
     if (SHOTS) {
       const shot = await send('Page.captureScreenshot', { format: 'png' })

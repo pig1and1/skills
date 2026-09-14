@@ -66,9 +66,12 @@ export function lineChart(host, options = {}) {
   tip.className = 'chart-tip'
   const ylab = document.createElement('div')
   ylab.className = 'chart-ylab'
+  const xlab = document.createElement('div')
+  xlab.className = 'chart-xlab'
+  xlab.setAttribute('aria-hidden', 'true')   // the svg already carries the a11y summary
   const endLabel = document.createElement('span')
   endLabel.className = 'chart-endlabel'
-  host.append(svg, ylab, tip, endLabel)
+  host.append(svg, ylab, xlab, tip, endLabel)
 
   const observer = new ResizeObserver(() => schedule())
 
@@ -106,6 +109,7 @@ export function lineChart(host, options = {}) {
     if (!pts.length) {
       svg.innerHTML = ''
       ylab.innerHTML = ''
+      xlab.innerHTML = ''
       endLabel.style.display = 'none'
       tip.style.display = 'none'
       svg.setAttribute('aria-label', 'No data')
@@ -204,6 +208,22 @@ export function lineChart(host, options = {}) {
     host.dataset.xstart = fmtX(first.t)
     host.dataset.xend = fmtX(last.t)
     host.dataset.granularity = granularity
+
+    // X axis. Until now this chart drew none, so a time series gave no way to
+    // tell which day you were looking at without hovering. Ticks are evenly
+    // spaced in time, which is what a linear time axis means -- picking "nice"
+    // calendar boundaries would put them at uneven pixel gaps instead.
+    const xTicks = Array.from({ length: 5 }, (_, i) =>
+      first.t + (last.t - first.t) * (i / 4))
+    xlab.innerHTML = xTicks.map((t) => {
+      // Clamped, or a tick sitting on the domain edge pushes its label outside.
+      const pct = Math.max(0.5, Math.min(99.5, (xs.scale(t) / w) * 100))
+      const label = granularity === 'month' ? fmtX(t).slice(0, 7) : fmtX(t).slice(5)
+      return `<span style="position:absolute;left:${pct.toFixed(3)}%;transform:translateX(-50%);` +
+        `white-space:nowrap">${esc(label)}</span>`
+    }).join('')
+    xlab.style.cssText = 'position:absolute;left:0;right:0;bottom:0;height:18px;display:block;' +
+      'padding-left:0;margin-top:0;pointer-events:none'
 
     endLabel.style.display = state.showEndLabel === false ? 'none' : ''
     endLabel.textContent = fmtY(last.value)

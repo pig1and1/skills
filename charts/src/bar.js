@@ -45,9 +45,12 @@ export function barChart(host, options = {}) {
   tip.className = 'chart-tip'
   const ylab = document.createElement('div')
   ylab.className = 'chart-ylab'
+  const xlab = document.createElement('div')
+  xlab.className = 'chart-xlab'
+  xlab.setAttribute('aria-hidden', 'true')   // the svg already carries the a11y summary
   const endLabel = document.createElement('span')
   endLabel.className = 'chart-endlabel'
-  host.append(svg, ylab, tip, endLabel)
+  host.append(svg, ylab, xlab, tip, endLabel)
 
   const observer = new ResizeObserver(() => schedule())
   const height = () => num(state.height, 300)
@@ -91,7 +94,7 @@ export function barChart(host, options = {}) {
     host.style.height = `${h}px`
 
     if (!cols.length) {
-      svg.innerHTML = ''; ylab.innerHTML = ''; endLabel.style.display = 'none'; tip.style.display = 'none'
+      svg.innerHTML = ''; ylab.innerHTML = ''; xlab.innerHTML = ''; endLabel.style.display = 'none'; tip.style.display = 'none'
       svg.setAttribute('aria-label', 'No data')
       state.onRender && state.onRender({ ...prep, empty: true })
       return
@@ -172,6 +175,23 @@ export function barChart(host, options = {}) {
       `<span style="top:${((ys(t) / h) * 100).toFixed(3)}%">${esc(fmtY(t))}</span>`
     )).join('')
     ylab.style.cssText = `position:absolute;left:0;top:0;bottom:0;width:${pad.left}px;pointer-events:none`
+
+    // X axis. Bars sit in bands, so a label belongs at each band centre -- but
+    // only every Nth one: on a narrow container, 30 bars with 30 dates is a
+    // smear. The last column always keeps its label so the range stays legible.
+    const room = Math.max(2, Math.floor(area.width / 64))
+    const every = Math.max(1, Math.ceil(cols.length / room))
+    xlab.innerHTML = cols.map((col, ci) => {
+      if (ci % every !== 0 && ci !== cols.length - 1) return ''
+      const pct = Math.max(0.5, Math.min(99.5, (bands.center(ci) / w) * 100))
+      const raw = fmtX(col.x)
+      // Full ISO days are too wide under a bar; MM-DD carries the same meaning.
+      const label = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw.slice(5) : raw
+      return `<span style="position:absolute;left:${pct.toFixed(3)}%;transform:translateX(-50%);` +
+        `white-space:nowrap">${esc(label)}</span>`
+    }).join('')
+    xlab.style.cssText = 'position:absolute;left:0;right:0;bottom:0;height:18px;display:block;' +
+      'padding-left:0;margin-top:0;pointer-events:none'
 
     svg.setAttribute('aria-label', ariaFor(prep))
     state.onRender && state.onRender({ ...prep, domain: [lo, hi], empty: false })
