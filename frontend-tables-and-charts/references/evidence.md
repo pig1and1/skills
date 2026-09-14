@@ -126,6 +126,44 @@ app-interface** 五个系统归纳。§2 尺寸表的**起点**来自它。
 
 ---
 
+## 页面级状态
+
+**B 级 · 一手规范** —— 无障碍部分出自 [W3C WCAG](https://github.com/w3c/wcag) 的 SC 源文件
+（`guidelines/sc/20/*.html`、`guidelines/sc/21/*.html`）。**原文逐字摘录，不是转述**：
+
+| SC | 等级 | 原文（截取） |
+|---|---|---|
+| **4.1.3** Status Messages | AA | status messages can be **programmatically determined through role or properties** such that they can be presented to the user by assistive technologies **without receiving focus** |
+| **3.3.1** Error Identification | **A** | the item that is in error is identified and the error is **described to the user in text** |
+| **3.3.3** Error Suggestion | AA | if suggestions for correction are known, then the suggestions are provided to the user |
+| **3.3.2** Labels or Instructions | **A** | Labels or instructions are provided when content requires user input |
+| **3.2.2** On Input | **A** | Changing the setting of any user interface component does not automatically cause a change of context |
+
+> **一个边界**：4.1.3 要求"用 role 或属性让状态可被程序化识别"，
+> 而 `role="status"` / `aria-live="polite"` / `aria-busy="true"` 是**WAI-ARIA 的具体机制**。
+> SC 原文没有点名这三个名字 —— 所以"用它们"是**实现选择**，不是规范的字面要求。
+> 别把机制当成规范原文引用。
+
+**D 级 · 故障证据** —— 过期异步响应覆盖更新的那一次。**四条同形状的公开记录**：
+
+| 仓库 | 现象 |
+|---|---|
+| [`juspay/xyne-spaces` #677](https://github.com/juspay/xyne-spaces/pull/677) | 搜索的 **stale / out-of-order** 响应竞态，导致黑屏 |
+| [`alexander-bain/bainluck` #1469](https://github.com/alexander-bain/bainluck/issues/1469) | typeahead 的 stale-response 与取消竞态加固 |
+| [`traceroot-ai/traceroot` #1802](https://github.com/traceroot-ai/traceroot/pull/1802) | 防止过期的会话历史覆盖当前会话 |
+| [`SiLioLabs/PayFlow` #870](https://github.com/SiLioLabs/PayFlow/issues/870) | 把 empty / error 做成 **race-safe** |
+
+> **D 级的 stars 普遍很低，这不降低它们的价值**：四家独立地把同一个竞态当成缺陷来修，
+> 说明**这不是某个项目的特殊性，而是一个通用故障形状**。
+> 判断依据是"四个独立来源描述同一现象"，不是"某个来源有多少 star"。
+
+**③ 经验默认值**（**没有权威可引，明说是经验**）：
+
+- **表单值跨刷新保留**（`sessionStorage` 一类）—— 产品决定；
+- **提交中禁用按钮 + 改文案** —— 产品决定。注意它与 3.2.2 不冲突：禁用是控件状态，不是上下文变化。
+
+---
+
 ## 这个 skill 自己踩过的坑
 
 写它、以及用它做示例的过程中，发现的都是**验证方法本身**的问题，值得单列：

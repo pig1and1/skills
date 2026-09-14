@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>查询台 · 表单与页面状态</title>
+<!-- 自包含：不引外部样式表。这个页面一个 --chart-* token 都不用，
+     留着 ./src/theme.css 的链接只会变成一条复制到别处就 404 的悬空依赖。 -->
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+
+  :root {
+    --page: #f6f7f9;
+    --card: #ffffff;
+    --hair: rgba(22, 24, 29, .10);
+    --hair-soft: rgba(22, 24, 29, .06);
+    --ink: #16181d;
+    --ink-2: #3d434f;
+    --muted: #6c7484;
+    --sunken: #f7f8fa;
+    --field: #ffffff;
+    --focus: #4f46e5;
+    --bad: #b91c1c;
+    --warn: #a16207;
+    --good: #15803d;
+    --accent: #c2410c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0e0f12; --card: #15171c;
+      --hair: rgba(242,243,246,.12); --hair-soft: rgba(242,243,246,.07);
+      --ink: #f2f3f6; --ink-2: #c5c9d3; --muted: #8b91a0; --sunken: #101216;
+      --field: #1b1e24; --focus: #a5b4fc;
+      --bad: #f87171; --warn: #fbbf24; --good: #4ade80; --accent: #fb923c;
+    }
+  }
+
+  html, body { margin: 0; }
+  body {
+    background: var(--page); color: var(--ink);
+    font: 14px/1.55 system-ui, -apple-system, "Segoe UI", "Noto Sans SC", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    padding: 22px 20px 56px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 17px; margin: 0 0 4px; letter-spacing: -.01em; }
+  .sub { color: var(--muted); font-size: 12.5px; margin-bottom: 18px; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--hair); border-radius: 11px;
+    padding: 16px 18px;
+  }
+  .card + .card { margin-top: 12px; }
+
+  /* ---- 表单 ---- */
+  .filters {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px 16px;
+    align-items: start;
+  }
+  .f { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .f.wide { grid-column: span 2; }
+  .f label { font-size: 12px; color: var(--ink-2); font-weight: 560; }
+
+  .f input, .f select {
+    font: inherit; font-size: 13px; color: var(--ink);
+    background: var(--field); border: 1px solid var(--hair); border-radius: 7px;
+    padding: 8px 10px; width: 100%; min-width: 0;
+  }
+  /* 焦点环不能只靠颜色，也不能被 outline:none 抹掉 */
+  .f input:focus-visible, .f select:focus-visible {
+    outline: 2px solid var(--focus); outline-offset: 1px; border-color: var(--focus);
+  }
+  .f input[aria-invalid="true"] {
+    border-color: var(--bad);
+    box-shadow: inset 3px 0 0 var(--bad);
+  }
+  .f .err {
+    font-size: 12px; color: var(--bad); min-height: 16px;
+  }
+  .f .hint { font-size: 11.5px; color: var(--muted); }
+
+  .actions {
+    display: flex; align-items: center; gap: 10px;
+    margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--hair-soft);
+  }
+  .spacer { flex: 1 1 auto; }
+
+  button {
+    font: inherit; font-size: 13px; font-weight: 560;
+    border-radius: 7px; padding: 8px 16px; cursor: pointer;
+    border: 1px solid transparent;
+  }
+  button.primary { background: var(--accent); color: #fff; }
+  button.ghost { background: transparent; color: var(--ink-2); border-color: var(--hair); }
+  button.ghost:hover:not(:disabled) { background: var(--sunken); }
+  button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  button:disabled { opacity: .55; cursor: not-allowed; }
+  button:active:not(:disabled) { transform: translateY(1px); }
+
+  /* ---- 结果区四态 ---- */
+  .results { min-height: 320px; display: flex; flex-direction: column; }
+  .results > .hd {
+    display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px;
+  }
+  .results > .hd h2 { font-size: 13px; margin: 0; letter-spacing: .02em; }
+  .results > .hd .count { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+
+  .state { flex: 1 1 auto; display: flex; flex-direction: column; }
+  .state .body {
+    flex: 1 1 auto; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 8px;
+    text-align: center; padding: 34px 20px; color: var(--muted);
+  }
+  .state .body strong { color: var(--ink); font-size: 14px; font-weight: 600; }
+  .state .body p { margin: 0; font-size: 13px; max-width: 46ch; }
+  .glyph {
+    width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center;
+    background: var(--sunken); border: 1px solid var(--hair); font-size: 16px; margin-bottom: 2px;
+  }
+
+  /* 骨架：高度与真实内容一致，避免加载完成时页面抖 */
+  .skeleton { display: flex; flex-direction: column; gap: 8px; padding: 4px 0; }
+  .skeleton i {
+    display: block; height: 40px; border-radius: 7px; background: var(--sunken);
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: .55 } 50% { opacity: 1 } }
+  @media (prefers-reduced-motion: reduce) { .skeleton i { animation: none } }
+
+  /* ---- 结果表 ---- */
+  table.dt {
+    table-layout: fixed; width: 100%; border-collapse: separate; border-spacing: 0;
+    font-variant-numeric: tabular-nums; font-size: 13px;
+  }
+  .dt caption { text-align: left; color: var(--muted); font-size: 12px; padding-bottom: 8px; }
+  .dt th, .dt td {
+    height: 44px; padding: 10px 14px; text-align: left; border: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .dt thead th {
+    position: sticky; top: 0; z-index: 2; background: var(--card);
+    box-shadow: inset 0 -1px 0 var(--hair); color: var(--muted);
+    font-size: 11.5px; font-weight: 620; letter-spacing: .03em; text-transform: uppercase;
+  }
+  .dt tbody tr { box-shadow: inset 0 -1px 0 var(--hair-soft); }
+  .dt tbody tr:hover { background: var(--sunken); }
+  .dt .num { text-align: right; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 560; }
+  .pill.ok { background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); }
+  .pill.warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+  .pill.bad { background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--bad); }
+
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+  @media (max-width: 860px) { .filters { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>查询台</h1>
+  <div class="sub">演示表单与页面级状态：未查询 / 校验失败 / 加载中 / 无结果 / 请求失败 / 有结果</div>
+
+  <form class="card" id="form" novalidate>
+    <div class="filters">
+      <div class="f">
+        <label for="range">时间范围</label>
+        <select id="range" name="range">
+          <option value="1h">最近 1 小时</option>
+          <option value="24h" selected>最近 24 小时</option>
+          <option value="7d">最近 7 天</option>
+        </select>
+      </div>
+
+      <div class="f">
+        <label for="endpoint">接口</label>
+        <select id="endpoint" name="endpoint">
+          <option value="">全部接口</option>
+          <option value="/api/items">/api/items</option>
+          <option value="/api/search">/api/search</option>
+          <option value="/api/report">/api/report</option>
+        </select>
+      </div>
+
+      <div class="f">
+        <label for="minErr">错误率下限（%）</label>
+        <input id="minErr" name="minErr" type="number" inputmode="decimal"
+               min="0" max="100" step="0.1" value="0"
+               aria-describedby="minErr-hint minErr-err">
+        <span class="hint" id="minErr-hint">0–100 之间的小数，例如 2.5</span>
+        <span class="err" id="minErr-err" role="alert"></span>
+      </div>
+
+      <div class="f">
+        <label for="keyword">关键字</label>
+        <input id="keyword" name="keyword" type="search" placeholder="错误信息片段"
+               aria-describedby="keyword-hint">
+        <span class="hint" id="keyword-hint">留空表示不限</span>
+      </div>
+
+      <div class="f wide">
+        <label for="note">备注（表单值在重新加载后应当保留）</label>
+        <input id="note" name="note" type="text" placeholder="可留空">
+      </div>
+    </div>
+
+    <div class="actions">
+      <button type="submit" class="primary" id="go">查询</button>
+      <button type="button" class="ghost" id="reset">重置</button>
+      <span class="spacer"></span>
+      <span class="hint" id="form-status" role="status" aria-live="polite"></span>
+    </div>
+  </form>
+
+  <section class="card results" id="results" aria-labelledby="rh">
+    <div class="hd">
+      <h2 id="rh">结果</h2>
+      <span class="count" id="count"></span>
+    </div>
+    <div class="state" id="state" aria-busy="false"></div>
+  </section>
+
+  <p class="hint" style="margin-top:14px">
+    只想看某一态？给地址加上 <code>?force=loading</code> / <code>empty</code> /
+    <code>error</code> / <code>ok</code> / <code>reject</code>。
+  </p>
+
+</div>
+
+<script type="module">
+const $ = (id) => document.getElementById(id)
+const form = $('form'), stateEl = $('state'), countEl = $('count'), statusEl = $('form-status')
+
+const FIELDS = ['range', 'endpoint', 'minErr', 'keyword', 'note']
+const FORCE = new URLSearchParams(location.search).get('force')
+
+/* ---- 表单值持久化 -------------------------------------------------------
+   重新加载后保留，否则用户每次刷新都要重填。 */
+const KEY = 'query-console:filters'
+function saveFilters() {
+  try {
+    const o = {}
+    for (const f of FIELDS) o[f] = $(f).value
+    sessionStorage.setItem(KEY, JSON.stringify(o))
+  } catch { /* 隐私模式下 sessionStorage 会抛，忽略即可 */ }
+}
+function restoreFilters() {
+  try {
+    const raw = sessionStorage.getItem(KEY)
+    if (!raw) return
+    const o = JSON.parse(raw)
+    for (const f of FIELDS) if (typeof o[f] === 'string') $(f).value = o[f]
+  } catch { /* 坏数据就当没有 */ }
+}
+
+/* ---- 校验：错误挂在字段上，用 aria-describedby 关联 ---- */
+function setFieldError(id, msg) {
+  const input = $(id), box = $(id + '-err')
+  if (msg) {
+    input.setAttribute('aria-invalid', 'true')
+    box.textContent = msg
+  } else {
+    input.removeAttribute('aria-invalid')
+    box.textContent = ''
+  }
+}
+function validate() {
+  const raw = $('minErr').value.trim()
+  if (raw === '') { setFieldError('minErr', '请填一个数值，或填 0'); return null }
+  const n = Number(raw)
+  if (!Number.isFinite(n)) { setFieldError('minErr', '不是一个有效数字'); return null }
+  if (n < 0 || n > 100) { setFieldError('minErr', '要在 0 到 100 之间'); return null }
+  setFieldError('minErr', '')
+  return {
+    range: $('range').value,
+    endpoint: $('endpoint').value,
+    minErr: n,
+    keyword: $('keyword').value.trim(),
+  }
+}
+
+/* ---- 造数据 ---- */
+let seed = 7
+const rnd = () => (seed = (seed * 1103515245) % 2147483647) / 2147483647
+
+function makeRows(q) {
+  const eps = q.endpoint ? [q.endpoint] : ['/api/items', '/api/search', '/api/report']
+  const rows = []
+  for (const ep of eps) {
+    for (let i = 0; i < 9; i++) {
+      const base = { '/api/items': 118, '/api/search': 176, '/api/report': 342 }[ep]
+      const rate = +(rnd() * (ep === '/api/report' ? 7 : 3)).toFixed(2)
+      rows.push({
+        ep,
+        minute: 60 - i * 6,
+        rate,
+        p95: Math.round(base + (rnd() - .5) * 60),
+        msg: rate > 5 ? 'upstream read timeout' : 'connection reset by peer',
+      })
+    }
+  }
+  return rows
+    .filter(r => r.rate >= q.minErr)
+    .filter(r => !q.keyword || r.msg.toLowerCase().includes(q.keyword.toLowerCase()))
+    .slice(0, 12)
+}
+
+/* ---- 渲染四态 ---- */
+const esc = (s) => String(s).replace(/[&<>"']/g, c =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+function renderIdle() {
+  stateEl.setAttribute('aria-busy', 'false')
+  stateEl.innerHTML = `<div class="body">
+    <div class="glyph" aria-hidden="true">▦</div>
+    <strong>还没有查询</strong>
+    <p>填好条件后点「查询」。上面那行是空的，不代表没有数据。</p>
+  </div>`
+  countEl.textContent = ''
+}
+
+function renderLoading() {
+  // aria-busy 让辅助技术知道这块正在变；骨架高度与真实行高一致（40px ≈ 44px 行）
+  stateEl.setAttribute('aria-busy', 'true')
+  stateEl.innerHTML = `<div class="body" style="align-items:stretch;justify-content:flex-start;padding:4px 0">
+    <div class="skeleton" aria-hidden="true">${'<i></i>'.repeat(6)}</div>
+    <span class="sr-only">正在查询…</span>
+  </div>`
+  countEl.textContent = ''
+}
+
+function renderEmpty(q) {
+  stateEl.setAttribute('aria-busy', 'false')
+  stateEl.innerHTML = `<div class="body">
+    <div class="glyph" aria-hidden="true">∅</div>
+    <strong>查询成功，但没有符合条件的记录</strong>
+    <p>条件和数据都没问题。可以放宽「错误率下限」${q.minErr > 0
+      ? `（现在是 ${q.minErr}%）` : ''}${q.keyword ? '，或清掉关键字' : ''}再试。</p>
+  </div>`
+  countEl.textContent = '0 条'
+}
+
+function renderError(message) {
+  stateEl.setAttribute('aria-busy', 'false')
+  stateEl.innerHTML = `<div class="body">
+    <div class="glyph" aria-hidden="true">!</div>
+    <strong>查询失败</strong>
+    <p>${esc(message)}</p>
+    <p style="margin-top:2px"><button type="button" class="ghost" id="retry">重试</button></p>
+  </div>`
+  countEl.textContent = ''
+  $('retry').addEventListener('click', () => submit())
+}
+
+function renderRows(rows) {
+  stateEl.setAttribute('aria-busy', 'false')
+  const body = rows.map(r => `<tr>
+    <td>${esc(r.ep)}</td>
+    <td class="num">${r.minute} 分钟前</td>
+    <td class="num">${r.rate.toFixed(2)}%</td>
+    <td class="num">${r.p95}ms</td>
+    <td>${r.rate > 5
+      ? '<span class="pill bad">高</span>'
+      : r.rate > 2 ? '<span class="pill warn">偏高</span>' : '<span class="pill ok">正常</span>'}</td>
+    <td title="${esc(r.msg)}">${esc(r.msg)}</td>
+  </tr>`).join('')
+
+  stateEl.innerHTML = `<div style="overflow:auto;max-height:420px">
+    <table class="dt">
+      <caption>按错误率倒序，最多 12 条。</caption>
+      <colgroup>
+        <col style="width:132px"><col style="width:110px"><col style="width:96px">
+        <col style="width:88px"><col style="width:82px"><col>
+      </colgroup>
+      <thead><tr>
+        <th scope="col">接口</th>
+        <th scope="col" class="num">时间</th>
+        <th scope="col" class="num">错误率</th>
+        <th scope="col" class="num">P95</th>
+        <th scope="col">评价</th>
+        <th scope="col">典型错误</th>
+      </tr></thead>
+      <tbody>${body}</tbody>
+    </table>
+  </div>`
+  countEl.textContent = `${rows.length} 条`
+}
+
+/* ---- 提交 ---------------------------------------------------------------
+   用 AbortController 让上一次未完成的请求失效，避免慢的那个后到把新的覆盖掉。 */
+let inflight = null
+
+function setBusy(busy) {
+  $('go').disabled = busy
+  $('go').textContent = busy ? '查询中…' : '查询'
+  $('reset').disabled = busy
+  statusEl.textContent = busy ? '正在查询' : ''
+}
+
+async function submit() {
+  const q = validate()
+  if (!q) {
+    // 校验失败要把焦点送回出错字段，否则键盘用户不知道哪里错了
+    $('minErr').focus()
+    statusEl.textContent = '有 1 处需要修正'
+    return
+  }
+  saveFilters()
+
+  if (inflight) inflight.abort()
+  const ac = new AbortController()
+  inflight = ac
+
+  renderLoading()
+  setBusy(true)
+
+  try {
+    await new Promise((res, rej) => {
+      const t = setTimeout(res, 900)
+      ac.signal.addEventListener('abort', () => { clearTimeout(t); rej(new DOMException('aborted', 'AbortError')) })
+    })
+    if (FORCE === 'error') throw new Error('服务暂时不可用（演示）')
+    const rows = FORCE === 'empty' ? [] : makeRows(q)
+    if (rows.length === 0) { renderEmpty(q); statusEl.textContent = '查询完成，无结果' }
+    else { renderRows(rows); statusEl.textContent = `查询完成，${rows.length} 条` }
+  } catch (e) {
+    if (e && e.name === 'AbortError') return          // 被新查询取代，不渲染
+    renderError(e && e.message ? e.message : '未知错误')
+    statusEl.textContent = '查询失败'
+  } finally {
+    if (inflight === ac) { inflight = null; setBusy(false) }
+  }
+}
+
+form.addEventListener('submit', (e) => { e.preventDefault(); submit() })
+$('reset').addEventListener('click', () => {
+  for (const f of FIELDS) {
+    const el = $(f)
+    if (el.tagName === 'SELECT') el.selectedIndex = 0
+    else if (f === 'minErr') el.value = '0'
+    else el.value = ''
+  }
+  setFieldError('minErr', '')
+  try { sessionStorage.removeItem(KEY) } catch {}
+  renderIdle()
+  statusEl.textContent = '已重置'
+  $('range').focus()
+})
+// 输入时清掉该字段的旧错误，别让红框一直挂着
+$('minErr').addEventListener('input', () => { if ($('minErr').getAttribute('aria-invalid')) setFieldError('minErr', '') })
+
+restoreFilters()
+
+/* ---- 初始态 ---- */
+const boot = FORCE === 'loading' ? 'loading' : FORCE ? 'run' : 'idle'
+if (boot === 'idle') { renderIdle(); statusEl.textContent = '' }
+else if (boot === 'loading') { renderLoading(); setBusy(true) }
+else { submit() }
+</script>
+</body>
+</html>

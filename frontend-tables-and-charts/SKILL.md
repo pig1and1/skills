@@ -647,6 +647,85 @@ tip.style.display = ''        // 错
 > 所以"图表放进栅格"通常没事，而**"表格或长文本放进栅格"几乎一定有事** ——
 > 正好落在本 skill 主题的旁边。
 
+## 14. 页面级状态：一块数据区有**四**种状态，不是三种
+
+> §7 讲**图表**的三态；这一节讲**页面上的数据区域**（结果表、列表、任何异步填充的块），
+> 比三态多一种。§13–§14 都在表格与图表之外。
+
+### 「还没查」不是「没有数据」
+
+**故障**：页面刚打开、用户还没提交，结果区就显示"暂无数据"。于是
+**系统坏了 / 查过但没有 / 我还没查** 三件事长得一模一样。
+
+**判据**：**这块区域能不能单独回答"上一次动作是什么、结果如何"？** 四种状态都要能独立读懂：
+
+| 状态 | 它要回答 | 反例 |
+|---|---|---|
+| **未查询** | 还没发生过查询 | 也显示"暂无数据" —— 用户在等一个永远不会来的结果 |
+| **加载中** | 正在查 | 空白；或只转圈，不说在查什么 |
+| **成功但无结果** | 查过了，条件没命中 | 与"未查询"共用文案；只说"无数据"，不说下一步怎么办 |
+| **查询失败** | 查了，但没成功 | 与"无结果"共用文案 —— **把故障说成正常** |
+
+**失败态要能重试，且重试要重放同一个查询**，不能让用户重填一遍。
+
+> §7 说过"空态要说明为什么空"。这里补的是**第四种**：**什么都没发生，也是一种状态。**
+
+### 状态变化必须能被辅助技术感知
+
+**一手规范** —— [WCAG 2.1 **SC 4.1.3 Status Messages**（AA）](https://www.w3.org/WAI/WCAG21/Understanding/status-messages.html)：
+
+> status messages can be **programmatically determined through role or properties** such that they
+> can be presented to the user by assistive technologies **without receiving focus**.
+
+**判据**：状态变完之后，**焦点没有移动，但变化能被读出来**。
+机制是 WAI-ARIA 的 `role="status"` / `aria-live="polite"`（播报条数与失败），
+外加正在被替换的那个区域上的 `aria-busy="true"`。
+
+**反例**：只把文字节点换掉、不加 live region。视觉上毫无问题，
+**屏幕阅读器完全不知道发生过一次查询。**
+
+### 字段错误：说清是哪一个、为什么、怎么办
+
+**一手规范**（逐字引自 [w3c/wcag](https://github.com/w3c/wcag) 的 SC 源文件）：
+
+| SC | 等级 | 原文 |
+|---|---|---|
+| [**3.3.1** Error Identification](https://www.w3.org/WAI/WCAG21/Understanding/error-identification.html) | **A** | the item that is in error is identified and the error is **described to the user in text** |
+| [**3.3.3** Error Suggestion](https://www.w3.org/WAI/WCAG21/Understanding/error-suggestion.html) | AA | if suggestions for correction are known, then the suggestions are provided to the user |
+| [**3.3.2** Labels or Instructions](https://www.w3.org/WAI/WCAG21/Understanding/labels-or-instructions.html) | **A** | Labels or instructions are provided when content requires user input |
+
+**落地成四条**：
+
+1. 错误写在**字段旁边**，并用 `aria-describedby` 把它**关联到那个输入**（3.3.1 的 "identified"）；
+2. 是**文本**，不是只把边框变红（3.3.1 的 "in text"）；
+3. 给**可执行的建议**，不是"输入无效"（3.3.3）—— 写"要在 0 到 100 之间"，不写"格式错误"；
+4. 标 `aria-invalid="true"`，**并在用户开始修正时清掉** —— 否则红框挂在一个已经改好的字段上。
+
+> ⚠️ **"校验失败后把焦点送回第一个出错字段"是实践经验（③），不是上面任何一条的字面要求。**
+> 3.3.1 只要求"指出并描述"。焦点回送有用，是因为键盘用户不必从表头重新 Tab 过来。
+
+⚠️ 另外注意 [**3.2.2 On Input**（A）](https://www.w3.org/WAI/WCAG21/Understanding/on-input.html)：
+改变控件值**不得**自动触发上下文变化。所以"输入到一半自动提交"是违规的；
+而"提交中禁用按钮"只是控件状态，不是上下文变化，**合法**。
+
+### 异步请求：过期响应不许覆盖新的
+
+**故障**（**D 级故障证据**）：用户改了条件再查一次，**第一次的慢响应后到**，把新结果盖成旧的。
+界面看起来完全正常，**数据是错的**。公开记录见 `evidence.md` 的"页面级状态"一节，
+四条的形态一致（搜索 stale/out-of-order 竞态、typeahead 取消竞态、会话历史被旧响应覆盖）。
+
+**判据**：**每个请求带一个"我是不是最新的"标记；响应回来时先问它，再决定渲不渲染。**
+用 `AbortController` 让旧请求失效，或比对一个自增序号。
+
+**反例**：`await fetch()` 之后直接 `render()` —— **谁后到谁赢，而"后到"和"最新"是两回事。**
+
+### 两条经验默认值（③）
+
+- **表单值在重新加载后保留**（`sessionStorage` 一类）。判据：**刷新之后，刚才填的还在吗？**
+  读不出来或解析失败就当没有，别让坏草稿把表单打坏。
+- **提交中禁用提交按钮并改文案**（"查询中…"），挡住连点引发的重复查询。
+  这不违反 3.2.2（它不是上下文变化），**但禁用必须给出理由** —— 按钮不能莫名变灰。
+
 ## 参考实现（按需加载，是起点不是成品）
 
 **代码骨架**（可以抄结构）
@@ -673,13 +752,22 @@ tip.style.display = ''        // 错
 - `references/min-width-probe.html` —— **§13 的反例页**：四种栅格情形并排，量一下就知道
   `min-width: 0` 少了会怎样。**它自己也是一条教训**：第一版探针的内容没宽过容器，
   四行测出来一模一样（见 §13 的 ⚠️）。
+- `references/query-console.html` —— **§14 的成品**：筛选表单 + 四种状态
+  （未查询 / 加载中 / 无结果 / 失败）+ 字段校验与焦点回送 + 过期请求作废 +
+  刷新后表单值保留。**零外部依赖，自包含。**
 
-> ⚠️ **要自己动手做时，先只读上面两组，不要打开这三份 HTML。** 它们把答案写全了
+> ⚠️ **要自己动手做时，先只读上面两组，不要打开这几份成品 HTML。** 它们把答案写全了
 > （`dirty-data-cases.html` 连朴素实现与加固实现的完整对跑都在里面）。
 > 它们的正确用法是**"做完之后对答案"或"照抄手法"**，不是当读本 ——
 > 当读本用，你会跳过真正需要自己想的那一步。
 >
 > `references/verify.html` 介于两者之间：它是**验证工具**，做完拿它自查，**不必先读**。
+
+⚠️ **`references/` 下的每个 HTML 都必须自包含**（不引外部样式表、不引外部脚本）。
+理由：它们会被**复制到别处**当起点用，一个相对路径的 `<link>` 到了新位置就是**静默 404** ——
+样式不生效，页面看上去"差不多能用"，很难发现。
+`query-console.html` 原本就带着一条多余的 `./src/theme.css` 链接（它一个 `--chart-*`
+token 都没用），已删掉。
 
 参考实现均**未经真实项目运行验证**，是为你的项目改写的起点：替换 token、
 按真实列宽填 `<colgroup>`、把行高与 `contain-intrinsic-size` 对齐。
