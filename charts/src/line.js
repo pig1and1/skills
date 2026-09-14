@@ -213,8 +213,11 @@ export function lineChart(host, options = {}) {
     // tell which day you were looking at without hovering. Ticks are evenly
     // spaced in time, which is what a linear time axis means -- picking "nice"
     // calendar boundaries would put them at uneven pixel gaps instead.
-    const xTicks = Array.from({ length: 5 }, (_, i) =>
-      first.t + (last.t - first.t) * (i / 4))
+    // How many ticks fit, rather than a fixed five: five dates on a 300px plot
+    // is a smear. ~110px is what "08-16" needs at 11px with room to breathe.
+    const tickCount = Math.max(2, Math.min(5, Math.floor(area.width / 110)))
+    const xTicks = Array.from({ length: tickCount + 1 }, (_, i) =>
+      first.t + (last.t - first.t) * (i / tickCount))
     xlab.innerHTML = xTicks.map((t) => {
       // Clamped, or a tick sitting on the domain edge pushes its label outside.
       const pct = Math.max(0.5, Math.min(99.5, (xs.scale(t) / w) * 100))

@@ -179,10 +179,17 @@ export function barChart(host, options = {}) {
     // X axis. Bars sit in bands, so a label belongs at each band centre -- but
     // only every Nth one: on a narrow container, 30 bars with 30 dates is a
     // smear. The last column always keeps its label so the range stays legible.
-    const room = Math.max(2, Math.floor(area.width / 64))
+    // 64px per label was too generous -- a 700px plot came out with ten dates
+    // and the last few collided. 88px keeps "08-16" legible, and six is the
+    // most a bar axis should carry regardless of how wide it gets.
+    const room = Math.max(2, Math.min(6, Math.floor(area.width / 88)))
     const every = Math.max(1, Math.ceil(cols.length / room))
+    // Aligned from the last column backwards. The final label is always kept
+    // (or the range becomes unreadable), and counting forward instead would let
+    // it land right next to the tick before it -- which is exactly what it did.
+    const lastIdx = cols.length - 1
     xlab.innerHTML = cols.map((col, ci) => {
-      if (ci % every !== 0 && ci !== cols.length - 1) return ''
+      if (ci !== lastIdx && (lastIdx - ci) % every !== 0) return ''
       const pct = Math.max(0.5, Math.min(99.5, (bands.center(ci) / w) * 100))
       const raw = fmtX(col.x)
       // Full ISO days are too wide under a bar; MM-DD carries the same meaning.
