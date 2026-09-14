@@ -37,6 +37,29 @@
 - **想看清波动** → 去掉面积填充，让折线自适应域；
 - **想表达"占了多少"** → 保留填充，从 0 起，接受波动被压缩。
 
+## 对数轴：什么时候值得，什么时候是误导
+
+**它解决的是跨数量级。** 数据从 1 跨到 1,000,000 时，线性轴会把小值那一段压成贴地的线。
+
+**判据（经验）**：**最大值 / 最小值 ≳ 100 倍，且没有 0 或负值** → 可以考虑对数轴。
+只要有一个 0，对数轴就画不出来（`log(0)` 无定义）；负值同理。
+
+**但它有真实代价，必须一起处理**：
+
+| 风险 | 处置 |
+|---|---|
+| 读者会**按线性读**，把倍数差看成差值 | **轴上写明"对数"**，刻度标 1 / 10 / 100 / 1000，而不是等距数字 |
+| 等距的视觉间距 = **相同的倍数**，不是相同的量 | 网格线放在 10 的幂上，不要等分 |
+| 零值、负值、缺失值在对数轴上**没有位置** | 要么剔除并**在图上说明**，要么就别用对数轴 |
+| 小值的波动被视觉放大 | 若结论依赖"小值也重要"，那是**数据故事**的问题，不是轴的问题 |
+
+**替代方案**：若只是想同时看清大小两端，**拆成两张图**（一张线性看整体、一张放大看小值）
+通常比对数轴更不容易被误读 —— 与"不同量纲拆图"是同一条思路。
+
+> 本节是**经验判据**（主文件「本文里的数字分三种」里的 ③ 类），不是规范原文。
+> 展开读 [Wilke, *Fundamentals of Data Visualization*](https://github.com/clauswilke/dataviz)（3.5k★）
+> 关于尺度与坐标轴的章节。
+
 ## 其他常见误导
 
 | 不要 | 原因 |
@@ -65,7 +88,13 @@
 
 ## 来源
 
-- [Carbon — Axes and labels](https://github.com/carbon-design-system/carbon-website/blob/main/src/pages/data-visualization/axes-and-labels/index.mdx) —— 从 0 的判据
-- [Avoiding Misleading Data Visualizations](https://github.com/LMK89/Machine-Learning-MD/blob/main/Data-Visualization/Avoiding%20Misleading%20Data%20Visualizations.md) —— 尺度与截断
-- [Datawrapper: line charts](https://www.datawrapper.de/academy/what-to-consider-when-creating-line-charts) —— 延伸到 0/100%、平滑曲线的代价
-- [Claus Wilke, *Fundamentals of Data Visualization*](https://github.com/clauswilke/dataviz) —— 配色陷阱
+- [Carbon — Axes and labels](https://github.com/carbon-design-system/carbon-website/blob/main/src/pages/data-visualization/axes-and-labels/index.mdx)
+  （**Carbon 本体 9.5k★**）—— 从 0 的判据
+- [Datawrapper: line charts](https://www.datawrapper.de/academy/what-to-consider-when-creating-line-charts)
+  —— 延伸到 0 / 100%、平滑曲线的代价
+- [Claus Wilke, *Fundamentals of Data Visualization*](https://github.com/clauswilke/dataviz)
+  （**3.5k★**）—— 配色陷阱、尺度与坐标轴
+
+> 本页原先还列了一条 `LMK89/Machine-Learning-MD`，称其覆盖"尺度与截断"。
+> 实测它 **0★ 且是 fork**，已移除 —— 与 `evidence.md` 里删掉的是同一条。
+> 那类内容现由 Carbon 与 Datawrapper 覆盖。
