@@ -396,7 +396,10 @@ function setBusy(busy) {
   $('go').disabled = busy
   $('go').textContent = busy ? '查询中…' : '查询'
   $('reset').disabled = busy
-  statusEl.textContent = busy ? '正在查询' : ''
+  // 只在开始查询时写状态。**不要在 busy=false 时清空** —— 结果消息是刚刚写进去的，
+  // 清掉它等于什么都没播报（这个 bug 真的发生过：finally 里的 setBusy(false) 把
+  // "查询失败" 抹成了空串，live region 于是永远没有内容）。
+  if (busy) statusEl.textContent = '正在查询'
 }
 
 async function submit() {
