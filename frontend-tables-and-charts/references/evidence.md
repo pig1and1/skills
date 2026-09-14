@@ -183,6 +183,20 @@ app-interface** 五个系统归纳。§2 尺寸表的**起点**来自它。
 | **§14 的范本自己违反了 §14**：`query-console.html` 在 `finally` 里调 `setBusy(false)`，把刚写好的"查询失败"抹成空串，`role="status"` 于是永远没内容 | **"设置了"和"留到了"是两件事**。live region 的内容不能在收尾逻辑里被清空 —— 否则那条 WCAG 4.1.3 的规则在实现上是空的。**这是写规则的那一轮埋下的，隔一轮才被检查器抓到** |
 | 竞态检查用 `#go.click()` 发第二次提交，而提交中该按钮是 `disabled` —— **disabled 按钮的 `click()` 是空操作** | **断言测的是"按钮被禁用"，不是"竞态被防住"**。拿掉 `AbortController` 之后它依然全绿。改成直接派发 `submit` 事件才真的造成重叠。**变异测试是唯一能让这种断言现形的办法** |
 | 同一次竞态检查里还留着一条与它重复的旧断言，名字写的是"最终结果是宽条件那次的" | 清理时漏删。**它和另一条同真同假**，等于多了一条不会独立失败的断言。互补的一对应当是：坏掉 A → 只有 ① 红；坏掉 B → 只有 ② 红。**做不到就说明两条在测同一件事** |
+| `min-width` 探针第一版用了 60 字符（约 432px），而 `1fr` 分到 438px —— **内容没宽过容器**，`min-width: auto` 根本没机会生效，四种情形测出来一模一样 | **"测了但没测到触发条件"和"没测"一样危险**：它给你一个"已验证"的错觉。**做反例时先确认反例真的会失败** —— 后来把内容加宽到约 120 字符，对照组当场差出 408px |
+
+**B 级 · 一手规范** —— §13 的机制出自 W3C CSS 工作组的源仓库
+[`w3c/csswg-drafts`](https://github.com/w3c/csswg-drafts)（原文，非转述）：
+
+| 文件 | 原文（截取） |
+|---|---|
+| [`css-grid-1/Overview.bs`](https://github.com/w3c/csswg-drafts/blob/main/css-grid-1/Overview.bs) | the used value of its **automatic minimum size** in a given axis is the **content-based minimum size** if all of the following are true: its computed value `overflow` is **not** a scrollable overflow value |
+| [`css-flexbox-1/Overview.bs`](https://github.com/w3c/csswg-drafts/blob/main/css-flexbox-1/Overview.bs) | *Automatic Minimum Size of Flex Items* —— `min-width/auto` … **is the new initial value** of the `min-width` and `min-height` properties |
+
+> **条件挂在 `overflow` 上，这一点值得单独记住**：默认的 `overflow: visible` 下自动最小值是
+> 内容的 `min-content`；一旦 `overflow` 不是 `visible`，规范说自动最小值**变成 0**。
+> 所以 `min-width: 0` 与 `overflow: hidden` **不是两种方案，是同一个机制的两条路径** ——
+> 实测三者（`min-width:0` / `overflow:hidden` / `overflow:auto`）的 track 宽度**完全相同**。
 
 **结论**：**断言必须能被证伪**——先确认它在坏的实现上真的会变红。
 这条比任何一条图表规则都更常救场。
