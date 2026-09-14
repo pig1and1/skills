@@ -17,6 +17,23 @@
   .cell.auto  { overflow: auto; }
 
   .wide { white-space: nowrap; font-family: ui-monospace, monospace; font-size: 12px; }
+
+  /* ---- 截断三例（7–9）--------------------------------------------------
+     同一段文本，只有"盒子的宽度是怎么来的"和"overflow 是什么"不同。
+     判据**不是**"有没有画出省略号" —— 规范写着 ellipsing 只影响渲染、不影响布局，
+     所以那个量不到。能量的是**有没有溢出**：内容宽度 > 盒子宽度。 */
+  .box {
+    width: 160px;
+    overflow: hidden;            /* text-overflow 只在 overflow ≠ visible 时生效 */
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    border: 1px solid #bbb;
+    padding: 4px 6px;
+    margin-bottom: 6px;
+  }
+  .box.hug { display: inline-block; width: auto; }  /* 宽度由内容决定 → 压根没有溢出 */
+  .box.vis { overflow: visible; }                   /* 有溢出，但 text-overflow 不生效 */
+  .txt { font-family: ui-monospace, monospace; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -39,12 +56,22 @@
 <h2>6 · 3fr / 2fr，overflow: hidden</h2>
 <div class="row three" id="r6"><div class="cell clip" id="f1"><div class="wide" id="w6"></div></div><div class="cell">右列</div></div>
 
+<h2>7 · 截断：盒子有确定宽度（对照）—— 会溢出，条件齐</h2>
+<div class="box" id="t1"><span class="txt" id="x1"></span></div>
+
+<h2>8 · 截断：宽度由内容决定（inline-block，不给宽度）—— 没有溢出</h2>
+<div class="box hug" id="t2"><span class="txt" id="x2"></span></div>
+
+<h2>9 · 截断：overflow: visible —— 溢出了，但 text-overflow 不生效</h2>
+<div class="box vis" id="t3"><span class="txt" id="x3"></span></div>
+
 <script>
   // 故意比 900px 视口下的 1fr track（约 438px）宽得多。
   // 第一版用了 60 字符（约 432px），内容没宽过容器，四种情形测出来一模一样 —— 等于没测。
   const WIDE = 'ERR_CONNECTION_RESET 2026-09-14T20:19:27Z req=14122 err=522 p95=161ms ' +
     'host=api-7f3c.internal region=cn-north-1 retry=3 upstream=gateway-02'
-  for (const id of ['w1', 'w2', 'w3', 'w4', 'w5', 'w6']) document.getElementById(id).textContent = WIDE
+  for (const id of ['w1', 'w2', 'w3', 'w4', 'w5', 'w6', 'x1', 'x2', 'x3'])
+    document.getElementById(id).textContent = WIDE
 
   window.__probe = () => {
     const out = {}
@@ -60,12 +87,37 @@
       const row = document.getElementById(rowId)
       const cb = cell.getBoundingClientRect(), rb = row.getBoundingClientRect()
       const two = row.classList.contains('three')
+      /* ⚠️ 必须扣掉 gap：轨道的应得宽度是 (行宽 − gap) 再按 fr 分配。
+       * 第一版写的是 rb.width/2，于是 1fr 的"应得"报成 438px，而真实可用是 432px ——
+       * 差的那 6px 就是 gap 的一半。min-width-check.mjs 一跑就把这个错量出来了。 */
+      const gap = 12
       out[name] = {
         trackW: Math.round(cb.width),
-        share: Math.round(two ? rb.width * 3 / 5 : rb.width / 2),
+        share: Math.round(two ? (rb.width - gap) * 3 / 5 : (rb.width - gap) / 2),
+        gap,
         rowOverflow: row.scrollWidth - row.clientWidth,
         docScroll: document.documentElement.scrollWidth,
         docClient: document.documentElement.clientWidth,
+      }
+    }
+    for (const [name, boxId, txtId] of [
+      ['trunc-fixed-width', 't1', 'x1'],
+      ['trunc-content-width', 't2', 'x2'],
+      ['trunc-overflow-visible', 't3', 'x3'],
+    ]) {
+      const box = document.getElementById(boxId)
+      const txt = document.getElementById(txtId)
+      const boxW = box.getBoundingClientRect().width
+      const contentW = txt.getBoundingClientRect().width
+      const overflows = contentW > boxW + 0.5
+      /* 省略号**有可能**出现的两个条件：内容真的溢出，且 overflow 不是 visible。
+       * 这里只判"条件齐不齐"，不判"画没画出来" —— 后者规范明说量不到。 */
+      out[name] = {
+        boxW: Math.round(boxW),
+        contentW: Math.round(contentW),
+        overflows,
+        overflowValue: getComputedStyle(box).overflow,
+        ellipsisPossible: overflows && getComputedStyle(box).overflow !== 'visible',
       }
     }
     return out

@@ -674,14 +674,26 @@ grid 子项的 **automatic minimum size** 取 **content-based minimum size**，
 
 | 处理 | `1fr 1fr` 的 track | 应得 | 行溢出 | `3fr 2fr` 的 track | 应得 |
 |---|---|---|---|---|---|
-| **无** | **846px** | 438px | **13px** | **846px** | 526px |
-| `min-width: 0` | 432px | 438px | 0 | —— | —— |
-| `overflow: hidden` | 432px | 438px | 0 | 518px | 526px |
-| `overflow: auto` | 432px | 438px | 0 | —— | —— |
+| **无** | **846px** | 432px | **13px** | **846px** | 518px |
+| `min-width: 0` | 432px | 432px | 0 | —— | —— |
+| `overflow: hidden` | 432px | 432px | 0 | 518px | 518px |
+| `overflow: auto` | 432px | 432px | 0 | —— | —— |
 
-**一份约 120 字符的不可断行文本，就足以把两列栅格撑成单列**（多出 408px）。
-可复现页面：[`references/min-width-probe.html`](references/min-width-probe.html) ——
-六个对照并排，量一下就知道。
+**一份约 120 字符的不可断行文本，就足以把两列栅格撑成单列**（多出 414px）。
+可复现页面：[`references/min-width-probe.html`](references/min-width-probe.html)；
+跑 [`references/min-width-check.mjs`](references/min-width-check.mjs) 会把上面这张表量出来。
+
+**截断的前置条件同样能量**（同一份探针的第 7–9 例）。省略号要出现需要**两个**条件：
+**内容真的溢出**，**且 `overflow` 不是 `visible`** —— 缺一个都白写。
+实测：有确定宽度 → 内容 828px > 盒 174px，条件齐；宽度由内容决定 →
+**盒 842px ≈ 内容 828px，压根没溢出**；`overflow: visible` → 溢出了但不生效。
+（**"有没有画出省略号"量不到**，原因见文末的验证陷阱。）
+
+> ⚠️ **"应得"要扣掉 `gap`。** 这张表原先写的是 438px / 526px —— 那是 `行宽 / 2`
+> 与 `行宽 × 3 / 5`，**漏掉了 `gap: 12px` 的那一份**（432 = 438 − 6，518 = 526 − 12 × 3/5）。
+> 探针里同一个公式也错着，直到检查脚本跑起来、三种修法精确落在 432px 才露出来。
+> **判据自己算错时，它会安静地给出一个看起来合理的"应得值"，
+> 然后把正确的实现报成"差了 6px"。**
 
 > ⚠️ **做这类反例时，先确认反例真的会失败。** 探针的第一版内容没宽过容器，
 > 六种情形测出来一模一样 —— **"测了但没测到触发条件"和"没测"一样危险**，
@@ -723,6 +735,10 @@ grid 子项的 **automatic minimum size** 取 **content-based minimum size**，
   ⚠️ **这一条最容易搞反**：在**栅格 / 弹性子项**上，`overflow: hidden` 恰恰会把自动最小值
   **变成 0**（见上面的一手规范），所以那种情形下省略号**是会出现的** ——
   别把"宽度由内容决定"和 `min-width: auto` 当成一回事。
+
+**两条都实测过**（探针第 7–9 例 + `min-width-check.mjs`）。第二条那个"宽度由内容决定"的盒子，
+量出来是 **盒 842px / 内容 828px** —— 盒子反而更宽，**根本没有溢出可言**。
+所以规范里"溢出时怎么渲染"那句话，在这种盒子上压根没被触发。
 
 单元格上的现成写法见 [`references/table.css`](references/table.css) 的 `.ellipsis`。
 
@@ -884,9 +900,12 @@ grid 子项的 **automatic minimum size** 取 **content-based minimum size**，
 - `references/stacked-bars-average-line.html` —— 复合图表：三段堆叠柱 + 同量纲平均折线共用从 0 起的轴；**整柱透明命中区**、柱顶圆角 path、点击选中并保持（区别于悬停）、图例全隐藏自动恢复。
 - `references/dashboard.html` —— 复杂示例：brush 选择驱动多视图联动、hover 十字准线、序列切换、加载/空态，5000 行虚拟表格与图表**共享同一处过滤状态**。
 - `references/dirty-data-cases.html` —— 脏数据对跑：9 个病态数据集，朴素实现 vs 加固实现，逐例给出诊断数值。
-- `references/min-width-probe.html` —— **§13 的反例页**：四种栅格情形并排，量一下就知道
-  `min-width: 0` 少了会怎样。**它自己也是一条教训**：第一版探针的内容没宽过容器，
+- `references/min-width-probe.html` —— **§13 的反例页**：九例并排（六例栅格轨道 + 三例截断），
+  量一下就知道 `min-width: 0` 少了会怎样。**它自己也是一条教训**：第一版探针的内容没宽过容器，
   四行测出来一模一样（见 §13 的 ⚠️）。
+- `references/min-width-check.mjs` —— 上面那份探针的**可执行检查**（10 条断言，零依赖，CDP + `file://`）。
+  **只断言关系、不断言绝对像素**（绝对值随视口与字体漂移）。它一跑就量出探针自己的
+  `share` 公式漏算了 `gap`，见 §13 表下的 ⚠️。
 - `references/query-console.html` —— **§14 的成品**：筛选表单 + 四种状态
   （未查询 / 加载中 / 无结果 / 失败）+ 字段校验与焦点回送 + 过期请求作废 +
   刷新后表单值保留。**零外部依赖，自包含。**
