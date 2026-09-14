@@ -4,11 +4,18 @@
  * 一个断言如果不可能失败，它比没有断言更糟 —— 它让你以为验过了。
  * 所以每一条都配一个"它应该怎样才算红"的想法，并且写完之后会**故意改坏页面**跑一次。
  *
- * 用法：node check.mjs        （先起 http://127.0.0.1:4180 服务这个目录）
+ * 用法：
+ *   node check.mjs                          # 需要先起一个静态服务服务本目录
+ *   BASE=http://127.0.0.1:4191 node check.mjs
+ *   QC_PAGE=query-console.html node check.mjs    # 页面文件名不是 index.html 时
+ *   QC_PATCH='["旧串","新串"]' node check.mjs    # 故意改坏页面，确认断言会红
+ *
+ * 为什么默认端口是 4180：那只是写它时的开发端口。**换端口必须显式给 BASE**，
+ * 否则会在下面那道前置检查里立刻停下，而不是在 Edge 里空等十几秒。
  */
 
 import { spawn } from 'node:child_process'
-import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
@@ -20,7 +27,26 @@ const MUTATE = process.env.MUTATE || ''   // 用来证伪自己
 /* QC_PATCH: JSON [find, replace]，跑之前把页面改坏，跑完还原。
    用它来证明"这些 PASS 不是白给的" —— 每条规则都要有一个能让它变红的改法。 */
 const PATCH = process.env.QC_PATCH ? JSON.parse(process.env.QC_PATCH) : null
-const PAGE = process.env.QC_PAGE || 'index.html'
+/* 页面文件名：本地工作副本叫 index.html，出厂的参考副本叫 query-console.html。
+ * 自动认一下，两种摆放都能直接跑；要指别的文件用 QC_PAGE。 */
+const PAGE = process.env.QC_PAGE ||
+  (existsSync('index.html') ? 'index.html' : 'query-console.html')
+
+/* 前置检查：页面真的取得回来吗？
+ * 没有这一步时，端口不对会在 Edge 里空等十几秒，最后报一句
+ * "page never became ready" —— 那读起来像页面坏了，而真实原因通常是
+ * 服务没起、或者端口不是默认的那个。（写它是因为我本人就这么踩过一次：
+ * 在 4191 上服务，却忘了设 BASE，然后去怀疑页面。） */
+try {
+  const probe = await fetch(`${BASE}/${PAGE}`)
+  if (!probe.ok) throw new Error('HTTP ' + probe.status)
+} catch (e) {
+  console.log(`取不到 ${BASE}/${PAGE} —— ${e.message}`)
+  console.log('默认 BASE 是 http://127.0.0.1:4180；服务起在别的端口就显式给：')
+  console.log('  BASE=http://127.0.0.1:4191 node check.mjs')
+  console.log('（模块脚本不能走 file://，本地必须先起一个静态服务。）')
+  process.exit(2)
+}
 const original = PATCH ? readFileSync(PAGE, 'utf8') : null
 if (PATCH) {
   if (!original.includes(PATCH[0])) {
@@ -89,7 +115,7 @@ try {
 
   /* ---------- 规则 1：四种状态必须彼此可区分 ---------- */
   const texts = {}
-  await load(BASE + '/index.html')
+  await load(BASE + '/' + PAGE)
   texts.idle = await ev('document.getElementById("state").textContent.replace(/\\s+/g," ").trim()')
   texts.idleBusy = await ev('document.getElementById("state").getAttribute("aria-busy")')
 
@@ -100,11 +126,11 @@ try {
   await sleep(1200)
   texts.ok = await ev('document.getElementById("state").textContent.replace(/\\s+/g," ").trim()')
 
-  await load(BASE + '/index.html?force=empty')
+  await load(BASE + '/' + PAGE + '?force=empty')
   await sleep(1400)
   texts.empty = await ev('document.getElementById("state").textContent.replace(/\\s+/g," ").trim()')
 
-  await load(BASE + '/index.html?force=error')
+  await load(BASE + '/' + PAGE + '?force=error')
   await sleep(1400)
   texts.error = await ev('document.getElementById("state").textContent.replace(/\\s+/g," ").trim()')
 
@@ -135,7 +161,7 @@ try {
   check('查询完成后 live region 有文本', (live.text || '').length > 0, JSON.stringify(live.text))
 
   /* ---------- 规则 3：字段错误要关联到输入，且是文本 ---------- */
-  await load(BASE + '/index.html')
+  await load(BASE + '/' + PAGE)
   await ev(`(() => { const i = document.getElementById('minErr'); i.value = '999'; })()`)
   await ev('document.getElementById("go").click()')
   await sleep(250)
@@ -172,7 +198,7 @@ try {
      click() 是空操作 —— 那样测出来"只有一次渲染"是假的，它测的是按钮禁用，不是竞态。
      （第一版就是这么写的，在"拿掉 AbortController"的变异下依然全绿。两次测量才发现。）
      所以直接派发 submit 事件，模拟从别的路径打进来的第二次提交。 */
-  await load(BASE + '/index.html')
+  await load(BASE + '/' + PAGE)
   // 先单独跑一次"宽条件"，拿到它的计数当基准 —— 否则无法区分
   // "只是第一次查询渲染了" 和 "第二次真的赢了"。
   const wideCount = await ev(`(async () => {
@@ -182,7 +208,7 @@ try {
     return document.getElementById('count').textContent.trim()
   })()`)
 
-  await load(BASE + '/index.html')
+  await load(BASE + '/' + PAGE)
   const race = await ev(`(async () => {
     const seen = []
     const el = document.getElementById('count')
@@ -216,7 +242,7 @@ try {
     // 所以这里直接验证"重试按钮存在且点击后会再次进入加载态"
     return null
   })()`)
-  await load(BASE + '/index.html?force=error')
+  await load(BASE + '/' + PAGE + '?force=error')
   await sleep(1400)
   const hasRetry = await ev(`!!document.getElementById('retry')`)
   check('失败态提供重试入口', hasRetry === true)
@@ -232,7 +258,7 @@ try {
   }
 
   /* ---------- 规则 5（③ 经验）：刷新后表单值保留 ---------- */
-  await load(BASE + '/index.html')
+  await load(BASE + '/' + PAGE)
   await ev(`(() => {
     document.getElementById('keyword').value = 'connection reset'
     document.getElementById('note').value = '给运维看的备注'
@@ -240,7 +266,7 @@ try {
     document.getElementById('go').click()
   })()`)
   await sleep(1300)
-  await load(BASE + '/index.html')      // 重新加载，不是重新开标签页
+  await load(BASE + '/' + PAGE)      // 重新加载，不是重新开标签页
   const kept = await ev(`({
     keyword: document.getElementById('keyword').value,
     note: document.getElementById('note').value,
@@ -251,7 +277,7 @@ try {
   check('刷新后下拉选择保留', kept.endpoint === '/api/search', JSON.stringify(kept.endpoint))
 
   /* ---------- 顺带：3.2.2 —— 改控件不得自动触发上下文变化 ---------- */
-  await load(BASE + '/index.html')
+  await load(BASE + '/' + PAGE)
   await ev(`(() => { const s = document.getElementById('range'); s.value = '7d'; s.dispatchEvent(new Event('change', {bubbles:true})) })()`)
   await sleep(200)
   const autoFired = await ev(`document.getElementById('state').textContent.includes('还没有查询')`)
