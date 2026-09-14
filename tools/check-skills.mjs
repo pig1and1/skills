@@ -75,11 +75,17 @@ for (const name of skills) {
   else ok(`references/ 里 ${present.length} 个文件都已被索引`)
 
   /* ---- 3. §N 交叉引用都指向存在的节 ---- */
+  // `meta/environment.md §12` 这种是引用**别的文件**的节号，不在本文件内校验，只报出来备查。
   const secs = new Set([...skill.matchAll(/^## (\d+)\./gm)].map(m => Number(m[1])))
-  const refs = new Set([...skill.matchAll(/§(\d+)/g)].map(m => Number(m[1])))
+  // 文件名可能被反引号包着（`meta/environment.md` §12），所以中间允许反引号与空白。
+  const allRefs = [...skill.matchAll(/([\w./\\-]*\.\w+)?[`\s]*§(\d+)/g)]
+  const refs = new Set(allRefs.filter(m => !m[1]).map(m => Number(m[2])))
+  const external = [...new Set(allRefs.filter(m => m[1]).map(m => `${m[1]} §${m[2]}`))]
+  const note = external.length ? `（另有 ${external.length} 个跨文件 § 引用，未校验: ${external.join(' / ')}）` : ''
   const dangling = [...refs].filter(n => !secs.has(n))
   if (dangling.length) fail(`悬空的 §N 引用: ${dangling.map(n => '§' + n).join(', ')}`)
-  else ok(`§0–§${Math.max(...secs)} 连续，${refs.size} 个交叉引用都有落点`)
+  else if (!refs.size) ok(`没有内部节号引用${note}`)
+  else ok(`§0–§${Math.max(...secs)} 连续，${refs.size} 个交叉引用都有落点${note}`)
 
   /* ---- 4. references/*.html 必须自包含 ---- */
   for (const f of present.filter(x => x.endsWith('.html'))) {

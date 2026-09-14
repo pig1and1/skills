@@ -40,9 +40,10 @@ description: Use when building or restyling a frontend data table OR chart — c
 
 这三个问题**任何一个答不上来，就先问用户**，不要替他假设。假设错了，后面全白做。
 
-### 第 2 步 · 选型（§3 §4 §10）
+### 第 2 步 · 选型（§0 §3 §4 §10）
 
 先定"表格还是图表"，再定具体类型，最后定技术：**点数 ≤ 1–2k 用内联 SVG，更多用 Canvas**。
+**选了表格就先定规模**（§0）：一次最多渲染多少行、要不要虚拟滚动 —— 这一步最容易过度工程。
 柱和线要同图？先确认它们**同量纲**（§10），不同量纲就拆图，不允许加第二 Y 轴。
 
 ### 第 3 步 · 搭骨架，让数据先正确显示
@@ -50,16 +51,19 @@ description: Use when building or restyling a frontend data table OR chart — c
 **先不管样式。** 顺序是：数据结构 → 计算（比例尺、刻度、堆叠、分箱）→ 渲染。
 
 - **把计算写成纯函数**：数字进、数字出，不碰 DOM。这样它可测，也就能真的被测。
-- **容器高度先固定**（§5），不要让内容撑开它。
+- **容器高度先固定**（§5），**容器宽度也要显式**（§13）：栅格与弹性子项默认带自动最小尺寸，
+  宽表格会把它撑破，而撑破往往在窄窗口或换了数据之后才出现。
 - 骨架见下面的「最小骨架」。
 
-### 第 4 步 · 逐条加固（§1 §6 §9）
+### 第 4 步 · 逐条加固（§1 §2 §6 §7 §9 §14）
 
 按这个优先级，因为它们造成的损害依次递减：
 
-1. **不误导**（§6）—— 柱状/面积从 0；折线可以自适应；不搞双轴、3D、超 5 类饼图。
-2. **不抖**（§1 §5）—— 列宽显式、行高固定、容器预留空间、网格淡而稳。
-3. **不崩**（§9）—— 脏值剔除并计数、时间排序、**缺口断开**、退化域不除零、超量降采样。
+1. **不误导**（§6 §14）—— 柱状/面积从 0；折线可以自适应；不搞双轴、3D、超 5 类饼图。
+   页面级数据区要能分清"**还没查 / 没数据 / 加载失败**"（§14），三者混为一谈就是误导。
+2. **不抖**（§1 §2 §5）—— 列宽显式（§2）、行高固定、容器预留空间、网格淡而稳。
+3. **不崩**（§7 §9）—— 脏值剔除并计数、时间排序、**缺口断开**、退化域不除零、超量降采样；
+   点数超 2k 换 Canvas，别在滚动回调里重绘（§7）。
 
 ### 第 5 步 · 加交互（§8 §10）
 
@@ -725,10 +729,8 @@ grid 子项的 **automatic minimum size** 取 **content-based minimum size**，
 
 ### 状态变化必须能被辅助技术感知
 
-**一手规范** —— [WCAG 2.1 **SC 4.1.3 Status Messages**（AA）](https://www.w3.org/WAI/WCAG21/Understanding/status-messages.html)：
-
-> status messages can be **programmatically determined through role or properties** such that they
-> can be presented to the user by assistive technologies **without receiving focus**.
+**规范依据** —— **WCAG 2.1 SC 4.1.3 Status Messages（AA）** 要求状态消息能被**程序化识别**，
+且**不需要接收焦点**就能读出来。（逐字原文与链接见 `evidence.md` 的"页面级状态"。）
 
 **判据**：状态变完之后，**焦点没有移动，但变化能被读出来**。
 机制是 WAI-ARIA 的 `role="status"` / `aria-live="polite"`（播报条数与失败），
@@ -755,14 +757,11 @@ grid 子项的 **automatic minimum size** 取 **content-based minimum size**，
 | **知道**（N 行里的第 k 行） | `role="progressbar"` + `aria-valuenow` / `aria-valuemin` / `aria-valuemax`，并把 `k / N` 写成文字 | 不给数字的转圈 |
 | **不知道**（等待一个没有长度概念的操作） | 不确定态：`aria-busy` + 一句"在做什么"的文案 | **百分比，哪怕是估算的** |
 
-**一手规范**（逐字原文见 `evidence.md`）：
+**规范依据**（逐字原文见 `evidence.md`）：
 
-- **WCAG 2.1 SC 4.1.3 的解读**把**进度**明确算作状态消息：
-  *"…on the waiting state of an application, **on the progress of a process**, or on the existence
-  of errors…"*，并举了 *"a dynamic progress bar to indicate the status of an upgrade"* 作为例子。
-- **WAI-ARIA** 对 `progressbar` 的定义：*"displays the progress status for tasks that **take a long
-  time**"*，且 *"Authors MAY set `aria-valuemin` and `aria-valuemax` to indicate the minimum and
-  maximum progress indicator values."*
+- **WCAG 4.1.3 的解读**把**进度**明确算作状态消息的一种，并举了动态进度条作为例子；
+- **WAI-ARIA** 的 `progressbar` 角色正是为**耗时长的任务**准备的，并提供
+  `aria-valuemin` / `aria-valuemax` / `aria-valuenow` 三个取值属性。
 
 > ⚠️ **这一条来自一次独立验证，而不是我想出来的。** 一个没有上下文的 AI 照本 skill 做导入页时，
 > 自己加了 `role="progressbar"` 与 `aria-valuenow` —— 而 §14 **从头到尾没提过这两样**。
@@ -786,13 +785,13 @@ grid 子项的 **automatic minimum size** 取 **content-based minimum size**，
 
 ### 字段错误：说清是哪一个、为什么、怎么办
 
-**一手规范**（逐字引自 [w3c/wcag](https://github.com/w3c/wcag) 的 SC 源文件）：
+**规范依据**（三条 WCAG；**逐字原文、SC 链接与源文件路径见 `evidence.md`**）：
 
-| SC | 等级 | 原文 |
+| SC | 等级 | 要求 |
 |---|---|---|
-| [**3.3.1** Error Identification](https://www.w3.org/WAI/WCAG21/Understanding/error-identification.html) | **A** | the item that is in error is identified and the error is **described to the user in text** |
-| [**3.3.3** Error Suggestion](https://www.w3.org/WAI/WCAG21/Understanding/error-suggestion.html) | AA | if suggestions for correction are known, then the suggestions are provided to the user |
-| [**3.3.2** Labels or Instructions](https://www.w3.org/WAI/WCAG21/Understanding/labels-or-instructions.html) | **A** | Labels or instructions are provided when content requires user input |
+| **3.3.1** Error Identification | **A** | 指出**哪一项**出错，并用**文本**描述它 |
+| **3.3.3** Error Suggestion | AA | 已知修正办法时，把建议给出来 |
+| **3.3.2** Labels or Instructions | **A** | 需要用户输入的内容要有标签或说明 |
 
 **落地成四条**：
 
@@ -804,9 +803,8 @@ grid 子项的 **automatic minimum size** 取 **content-based minimum size**，
 > ⚠️ **"校验失败后把焦点送回第一个出错字段"是实践经验（③），不是上面任何一条的字面要求。**
 > 3.3.1 只要求"指出并描述"。焦点回送有用，是因为键盘用户不必从表头重新 Tab 过来。
 
-⚠️ 另外注意 [**3.2.2 On Input**（A）](https://www.w3.org/WAI/WCAG21/Understanding/on-input.html)：
-改变控件值**不得**自动触发上下文变化。所以"输入到一半自动提交"是违规的；
-而"提交中禁用按钮"只是控件状态，不是上下文变化，**合法**。
+⚠️ 另外注意 **3.2.2 On Input（A）**：改变控件值**不得**自动触发上下文变化。
+所以"输入到一半自动提交"是违规的；而"提交中禁用按钮"只是控件状态，不是上下文变化，**合法**。
 
 ### 异步请求：过期响应不许覆盖新的
 
