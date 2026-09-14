@@ -106,8 +106,9 @@ export function render(host, rows, options = {}) {
 
 ## 参照标准：拿什么当尺子
 
-规则需要参照物。**完整出处、stars 与证据等级在 [`references/evidence.md`](references/evidence.md)**；
-这里只说**动手时该对照谁，以及每一类来源该怎么用**。
+规则需要参照物。**已核实的出处、stars 与证据等级在 [`references/evidence.md`](references/evidence.md)**
+—— 注意它覆盖的是**部分**规则，不是全部；正文里大量数字是**经验默认值**（见本节末尾
+「本文里的数字分三种」）。这里只说**动手时该对照谁，以及每一类来源该怎么用**。
 
 ### 先分清来源类型 —— 它们的判据不一样
 
@@ -146,6 +147,19 @@ export function render(host, rows, options = {}) {
 - **实现对照** —— [`d3/d3`](https://github.com/d3/d3)（**113.7k★**，比例尺与刻度的权威实现）、
   [`observablehq/plot`](https://github.com/observablehq/plot)（5.4k★，图形语法的现代写法）。
 
+### 本文里的数字分三种
+
+看到任何数字，先问它是哪一种 —— **最大的错误是把第三类当成第一类**：
+
+| 种类 | 例子 | 怎么用 |
+|---|---|---|
+| **① 有出处** | Y 轴基线判据 · `<caption>` / `scope` · CLS 的定义 | 照做；出处的等级在 `evidence.md` |
+| **② 平台 / 浏览器常量** | `devicePixelRatio` 与模糊 · `contain-intrinsic-size` 的塌陷行为 | 事实，照做 |
+| **③ 作者的经验默认值** | 48px 行高 · 表格 ≤100 行不虚拟化 · `≥2k` 点用 Canvas · `≤200ms` 动画 · `<6px` 视为点击 · 间隔 >3 倍中位值算缺口 | **一个合理的起点，不是规范** —— 按你的数据与场景调 |
+
+**③ 最多，而它们没有任何权威可引。** 给它们编一个出处，正是这个 skill 犯过的错。
+所以：**看到没有出处的数字，就按 ③ 对待，并允许自己改。**
+
 ### 一句忠告
 
 **借它们的判断，不借它们的依赖。** openstatusHQ 是 React + shadcn，carbon-charts 是 D3。
@@ -168,8 +182,10 @@ export function render(host, rows, options = {}) {
 | 1,000 – 10,000 | 虚拟滚动 + **服务端分页/排序/过滤** |
 | > 10,000 | **服务端承担一切**，或改用内置虚拟化的重量级网格 |
 
-1,000 与 10,000 是两道实测的性能墙。headless 方案（TanStack Table，约 9KB）适合 ≤10k 行
+1,000 与 10,000 是**经验上的**两道分界（不是实测的性能墙，具体拐点取决于行高、列数与 DOM 结构）。
+headless 方案（TanStack Table，包体积约 9KB）适合 ≤10k 行
 且要自绘 UI；内置虚拟化的网格（AG Grid，约 150KB）适合 100k+ 行。
+**体积数字是 2026-09 的快照，装之前自己看一眼 bundle。**
 
 ## 1. 表格稳定：滚动时什么都不跳
 
@@ -218,17 +234,22 @@ export function render(host, rows, options = {}) {
 | 单元格横向 padding | 12px | **16px** | 20px |
 | 字号 | 13px | **14px** | 14px |
 
-> **这张表的证据等级 —— 不要把它读成"四家一致"的权威结论。**
-> 已经**在源码里核实过**的只有 Carbon：表头 `block-size: $spacing-09`（48px）、单元格
-> `padding-block: $spacing-05`（16px 上下），而它自己还分多档 header size。
-> Ant Design 核实到的是**有 large（默认）/ middle / small 三档**（`cellPaddingBlock*`），
-> **并没有一个"默认 48px"**。Polaris 只核实到仓库权威且活跃，**未**逐个核对文档数值。
-> 原始来源是一份第三方归纳文档（`@hegemonart/get-design-done`，**npm 包，无 stars 可查**）；
-> 其中**"Atlassian"那一项连对应仓库都查不到**。
-> 所以下面这组数字是**一个可用的起点**，不是规范原文——用之前先按你自己的表格核一遍。
+> **这组数字是经验默认值，不是规范原文。** 来历和弱点一次讲清：
 >
-> **"紧凑"是给分析型仪表盘的特例，不是默认** —— 36px 行高 / 8px padding 属于"很紧凑"，
-> 当默认用会让表格显得拥挤。（参考实现曾误用 36px 并自称符合本节，已统一为 48px。）
+> - **原始来源是一份第三方归纳文档**（`@hegemonart/get-design-done`，**npm 包，无 stars 可查**），
+>   它自称归纳了五家系统；其中**"Atlassian"那一项，`atlassian/design-system` 仓库根本不存在**。
+> - **我核实到的是**：Carbon 表头 `block-size: $spacing-09`、单元格 `padding-block: $spacing-05`，
+>   且**分多档 header size**；Ant Design 有 **large（默认）/ middle / small 三档**
+>   （`cellPaddingBlock*`），**并没有一个"默认 48px"**；Polaris 只核实到仓库权威活跃。
+> - ⚠️ **Carbon 那个 48px 是表头高度，撑不住"数据行高 = 48px"。** 数据行高由纵向 padding
+>   （16px × 2）加内容行高决定，落在 48–56px 是**推算**，不是查到的。
+> - ⚠️ **`$spacing-09` / `$spacing-05` 的像素值我未从源码确认** —— 它们定义在 Carbon 的构建
+>   产物 `packages/layout/scss/generated/` 里，**那个目录不在仓库中**。48px / 16px 是按
+>   Carbon 的 spacing 体系**推断**的。
+> - **"常规"这一档是推荐起点，不是共识。** 用之前按你自己的字体、行数与阅读场景核一遍。
+>
+> **"紧凑"是给分析型仪表盘的特例，不是默认。** 参考实现曾用 36px 行高 / 8px padding 当默认
+> 并自称符合本节 —— 那比上表的"紧凑"档还紧，已统一为 48px。
 
 "好看"几乎全部来自**一致的节奏**，不是任何单点装饰。
 
@@ -237,18 +258,18 @@ export function render(host, rows, options = {}) {
 
 ### 无障碍契约（几条硬性的）
 
-表格最容易在这里失分，因为它看起来"只是个表格"。下面几条来自 **WAI-ARIA APG 的标准原文**
-（不是任何系统的转述），另有若干是多家设计系统在实践中的一致做法 —— 前者是**要求**，后者是**惯例**，
-两者分量不同：
+表格最容易在这里失分，因为它看起来"只是个表格"。下面五条**来自 WAI-ARIA APG 的标准原文**
+（不是任何系统的转述），**最后一条是产品惯例**（WCAG 要求键盘可达，但具体做法没有被规范写死）。
+**前五条是要求，最后一条是惯例，分量不同**：
 
 | 要求 | 为什么 | 性质 |
 |---|---|---|
-| `<table>` 必须有 **`<caption>`** 或 `aria-label` | 屏幕阅读器靠它播报"这是什么表" | 要求 |
-| 每个 `<th>` 都要 **`scope="col"`** | 缺了它 AT 无法按列导航 —— **最常被漏掉的一条** |
-| 可排序列要有 **`aria-sort="ascending\|descending\|none"`** | 只画一个箭头图标，辅助技术完全感知不到 |
-| 选中行要在 `<tr>` 上写 **`aria-selected="true"`** | 只用 CSS class 表示选中，AT 看不见 |
-| 横向滚动容器要有 **`tabindex="0"`** | 否则键盘用户根本无法横向滚这张表 |
-| 静态表格用 `role="table"`；**只有单元格可交互**才用 `role="grid"` | `grid` 会启用单元格级方向键导航，给只读表格加它反而添乱 |
+| `<table>` 必须有 **`<caption>`** 或 `aria-label` | 屏幕阅读器靠它播报"这是什么表" | **要求**（APG） |
+| 每个 `<th>` 都要 **`scope="col"`** | 缺了它 AT 无法按列导航 —— **最常被漏掉的一条** | **要求**（HTML / APG） |
+| 可排序列要有 **`aria-sort="ascending\|descending\|none"`** | 只画一个箭头图标，辅助技术完全感知不到 | **要求**（APG） |
+| 选中行要在 `<tr>` 上写 **`aria-selected="true"`** | 只用 CSS class 表示选中，AT 看不见 | **要求**（APG） |
+| 静态表格用 `role="table"`；**只有单元格可交互**才用 `role="grid"` | `grid` 会启用单元格级方向键导航，给只读表格加它反而添乱 | **要求**（APG） |
+| 横向滚动容器要有 **`tabindex="0"`** | 否则键盘用户根本无法横向滚这张表 | **惯例** —— WCAG 要求键盘可达，但"给滚动容器加 `tabindex="0"`"是实现方式，不是规范原文 |
 
 **键盘契约**（`role="grid"` 时，引自 [WAI-ARIA APG](https://www.w3.org/WAI/ARIA/apg/patterns/grid/)）：
 `←/→` 同行移动 · `↑/↓` 同列移动 · `Home`/`End` 行首行尾 · `Ctrl+Home`/`Ctrl+End` 表首表尾 ·
@@ -277,7 +298,7 @@ export function render(host, rows, options = {}) {
 | 方案 | 适用 | 代价 |
 |---|---|---|
 | CSS / HTML | 进度条、单组简单柱 | 表达力有限 |
-| **内联 SVG** | **≤ 1–2k 点**，需要交互或可访问性 | DOM 节点多，几千个后开始卡 |
+| **内联 SVG** | **约 ≤ 1–2k 点**（经验值），需要交互或可访问性 | DOM 节点多，几千个后开始卡 |
 | **Canvas** | **> 2k 点**、高频重绘 | 无 DOM 语义；**必须自己处理 DPR** |
 | 图表库 | 缩放、刷选、联动等复杂交互 | 包体积与配置复杂度 |
 
@@ -296,6 +317,8 @@ export function render(host, rows, options = {}) {
 | 多个图不同步 | 各自缩放 | **共享 Y 域** |
 
 **验收指标**：布局偏移是**可测量**的（Cumulative Layout Shift）。图表加载后的 CLS 应接近 0 ——
+**这个指标的一手出处是 [GoogleChrome/web-vitals](https://github.com/GoogleChrome/web-vitals)（8.6k★）**，
+不是某条 issue；拿它当验收门槛时引这里。
 这意味着容器高度在数据到达前就已确定。
 
 ## 6. 图表正确：别误导
@@ -383,7 +406,7 @@ tip.style.display = ''        // 错
 | **全同值 / 单点** | `(max-min)` 为 0 → 除零 | 域退化时**居中展开**（如 `lo-1, hi+1`），绝不除零 |
 | **离群值** | 自适应域被一个极端值拉扁，其余全挤成一条线 | 改用**分位数域**（如 1%–99%），或显式标注被截断的范围 |
 | **点太多**（>2k） | 几万个 DOM 节点交给浏览器 | **按时间桶降采样**再画；表格仍显示原始记录 |
-| **类别爆炸**（50 种） | 分类色只有 6–8 种可辨，颜色失去含义 | **Top-N + "其他"**，其余聚合；长标签截断并挂 `title` |
+| **类别爆炸**（50 种） | 颜色不再可区分，含义丢失。**Wilke：定性配色在 3–5 类时最有效**；本节的"6–8 种可辨"是更宽松的经验上限 | **Top-N + "其他"**，其余聚合；长标签截断并挂 `title` |
 
 **三条原则**：
 
@@ -560,7 +583,9 @@ tip.style.display = ''        // 错
 - `references/dirty-data.md` —— 脏数据处理对照：空洞、脏值、重复时间戳、乱序、恒定段、尖峰、极端量级、恶意标签，每类给出显示后果与处置。
 - `references/composite-charts.md` —— 复合图表：多量纲该拆图而不是加第二根轴；堆叠柱 + 折线的同量纲前提与命中区设计。
 - `references/verify.html` —— **自验证页面**：滚动前后列宽快照、数字列宽度波动、`content-visibility` 塌陷复现，全部读数值并自动判定。
-- `references/evidence.md` —— 每条规则对应的**真实故障记录**（GitHub issue / PR）与规范原文出处，以及验证过程本身的失误记录。
+- `references/evidence.md` —— 每条规则的**出处记录**（GitHub issue / PR、设计系统源码、教材），
+  含 **A/B/C/D 四级证据等级**与 stars，以及验证过程本身的失误记录。**注意它覆盖的是部分规则**，
+  不是每一条：本文里大量阈值是**经验默认值**（见 §2 前那段说明），那里没有出处可给。
 
 参考实现均**未经真实项目运行验证**，是为你的项目改写的起点：替换 token、
 按真实列宽填 `<colgroup>`、把行高与 `contain-intrinsic-size` 对齐。

@@ -1,15 +1,17 @@
 # 每条规则背后的真实故障
 
-`SKILL.md` 里的规则不是凭感觉写的。这里记录它们的来源：公开的 bug 报告、设计系统的规范原文、
-实践者的经验总结。
+`SKILL.md` 里的规则不是凭感觉写的。这里记录它们的来源：公开的 bug 报告、设计系统**源码**、
+实践者教材，以及**若干二手归纳**。**每条都标了证据等级与 stars，但"有出处"不等于"已核实"**
+—— 读的时候请连着等级一起读。
 
-**想知道"为什么要有这条规则"，读这里。日常施工不需要它。**
+**想知道"为什么要有这条规则"，读这里，但先读下面那张等级表。**
 
 ## 先看证据等级，再看结论
 
 这里的每个来源都**可追溯**，但**可追溯不等于已核实** —— 这条区别值得写在最前面，因为
-本 skill 曾经栽在它上面：一段带链接的二手归纳被写成了"四个系统一致"，而其中一项连
-对应仓库都查不到。
+本 skill 曾经栽在它上面：我在正文里写过"**四个**系统（Carbon / Polaris / Atlassian / Ant Design）
+在默认 48px 行高上一致"，而那句话来自一份自称归纳了**五家**的第三方文档（它还多算了 UUPM
+app-interface），我**一家都没核**。后来真去查：其中一项连仓库都不存在。
 
 | 等级 | 含义 | 怎么用 |
 |---|---|---|
@@ -18,15 +20,26 @@
 | **C · 二手归纳** | 别人转述多家系统 | **只当起点**，用前自己核一遍 |
 | **D · 故障证据** | 某个项目的 issue/PR 里发生过 | 现象可信；**普适性要单独判断** |
 
-**D 类的 stars 通常极低**（本页引用的几个是 0–1★），**这不降低它的价值**：一条 issue
-只要现象可复现就是硬证据。但它改变了措辞 —— 不是"很多人踩过"，而是"某个几乎无人使用的
-项目踩过"。判据不同：
+**D 类（故障证据）的 stars 普遍不高** —— 本页从 **0★**（`svelte-datatable`）到 **18.3k★**
+（`hermes-webui`）都有。**stars 低不降低它的价值**：一条 issue 只要现象可复现就是硬证据。
+但它改变了措辞 —— 不是"很多人踩过"，而是"某个几乎无人使用的项目踩过"。**两类来源判据不同**：
 
-- **规范/实现参考** → stars、fork、最近提交，衡量**可信度**（Ant Design 99.5k★、
-  Carbon 9.5k★、Polaris 6.2k★ 属此列）
-- **故障证据** → 不设 stars 门槛，改问"这是浏览器/平台原理，还是该项目的特殊性？"
+- **规范 / 实现参考** → **stars + fork 与否 + 最近提交**，衡量**可信度**
+  （Ant Design 99.5k★、MUI 99.0k★、Fluent 20.3k★、Primer 13.0k★、Carbon 9.5k★、
+  Polaris 6.2k★ 属此列；**fork 要追溯到父仓** —— 本页曾误把一个 0★ fork 列进"3k 以上"）
+- **故障证据** → **不设 stars 门槛**，改问"这是浏览器/平台原理，还是该项目的特殊性？"
   （"未做 `devicePixelRatio` 缩放会模糊"是原理，普适；"Safari 快滚时粘性表头抖 1–2px"
   是 WebKit 怪癖，不普适）
+
+**参照标准节里的五类来源，对应到这里的四级**：
+
+| 参照标准里的类型 | 对应等级 | 判据 |
+|---|---|---|
+| 标准原文（W3C ARIA / WCAG / APG） | **B** | 权威性；**stars 无关**（WCAG 仅 1.5k★ 也是标准） |
+| 设计系统 | **A**（能读源码时）/ **B** | stars + 最近提交 |
+| 教材 / 实践者 | **B** | 作者声誉 + stars |
+| 二手归纳 | **C** | 只当起点 |
+| 故障证据 | **D** | 普适性单独判断 |
 
 ---
 
@@ -44,8 +57,10 @@
 从 **Carbon DataTable、Polaris DataTable、Atlassian DynamicTable、Ant Design Table、UUPM
 app-interface** 五个系统归纳。§2 尺寸表的**起点**来自它。
 
-**核实结果（2026-09-13 查源码）**：Carbon 是 `block-size: $spacing-09`（48px）表头 +
-`padding-block: $spacing-05`（16px）单元格，且**分多档 header size**；Ant Design 是
+**核实结果（2026-09-13 查源码）**：Carbon 的表头是 `block-size: $spacing-09`、单元格是
+`padding-block: $spacing-05`，且**分多档 header size** —— 注意**48px 是按 Carbon 的 spacing
+体系推断的**（`$spacing-09` 的实际值定义在构建产物 `packages/layout/scss/generated/` 里，
+那个目录不在仓库中，**我没有从源码确认它等于 48px**）；Ant Design 是
 **三档**（`cellPaddingBlock` / `…MD` / `…SM`，注释写明 *"large size by default"*），
 **根本没有"默认 48px"**；**"Atlassian"那一项，`atlassian/design-system` 仓库不存在**。
 所以它那句"五家一致"**不能当结论用**，只能当一个待核实的线索。
@@ -69,14 +84,31 @@ app-interface** 五个系统归纳。§2 尺寸表的**起点**来自它。
 | [`askrjs/askr-charts` #30](https://github.com/askrjs/askr-charts/issues/30) | **1** | 默认分类色里有一对**相邻的红/绿** | 红绿色盲无法区分 —— **普适** | §11 |
 | [`crzyc98/planwise_navigator` #497](https://github.com/crzyc98/planwise_navigator/issues/497) | **0** | 调色板**未通过色觉审计**，最后维护两套 | 同上 | §11 |
 
-**规范（正确性）** —— stars 用来衡量可信度，下面这些都在 3k 以上：
+**规范（正确性）** —— 等级 B，**stars 只作参考**：标准原文和官方规范的 star 往往不高，
+因为它们不是给人 star 的项目。
 
 - [Carbon — Axes and labels](https://github.com/carbon-design-system/carbon-website/blob/main/src/pages/data-visualization/axes-and-labels/index.mdx)
   （**Carbon 本体 9.5k★**）—— Y 轴基线判据：柱状/面积必须从 0，折线/散点不必。
-- [Avoiding Misleading Data Visualizations](https://github.com/LMK89/Machine-Learning-MD/blob/main/Data-Visualization/Avoiding%20Misleading%20Data%20Visualizations.md)
-  —— 尺度选择与截断的后果。
-- [Carbon Charts](https://github.com/carbon-design-system/carbon-charts)（IBM，D3 + TypeScript）
+- [Carbon Charts](https://github.com/carbon-design-system/carbon-charts)（1.0k★，IBM，D3 + TypeScript）
   —— 明确区分**分类色 / 顺序色 / 发散色**三种用途；**用错类型比选错颜色更糟**。
+- [WAI-ARIA APG — Grid](https://www.w3.org/WAI/ARIA/apg/patterns/grid/)（**标准原文**）——
+  表格键盘契约（`role="grid"` 的方向键导航）出自这里。
+- [W3C ARIA](https://github.com/w3c/aria)（**752★**）· [WCAG](https://github.com/w3c/wcag)（**1.5k★**）
+  —— **判据用权威性，与 stars 无关**。
+- [GoogleChrome/web-vitals](https://github.com/GoogleChrome/web-vitals)（**8.6k★**）——
+  CLS 的定义与阈值。**§5 把"CLS 接近 0"当验收门槛，应引这里（一手文档），而不是某条 issue。**
+
+**设计系统**（等级 A/B，**stars + 最近提交 + 非 fork** 衡量可信度）：
+
+- [Ant Design](https://github.com/ant-design/ant-design) **99.5k★** · [MUI](https://github.com/mui/material-ui) **99.0k★**
+- [Fluent UI](https://github.com/microsoft/fluentui) **20.3k★** · [Primer](https://github.com/primer/css) **13.0k★**
+- [Carbon](https://github.com/carbon-design-system/carbon) **9.5k★** · [Polaris](https://github.com/Shopify/polaris) **6.2k★**
+- 实现参考：[TanStack Table](https://github.com/TanStack/table) **28.4k★** · [d3](https://github.com/d3/d3) **113.7k★**
+
+> **已移除的一条（自纠，写在这里因为它正是本页等级表要防的错误）**：
+> 原先此处列了 `LMK89/Machine-Learning-MD`，称它覆盖"尺度选择与截断的后果"。
+> 实测 **0★ 且是 fork**（父仓 `xbeat/Machine-Learning` 只有 626★）—— 却被我列进了
+> "都在 3k 以上"。该主题现由 Carbon 与 Datawrapper 覆盖。
 
 **实践（手艺层）** —— 正确性之外的部分主要来自这两处：
 
