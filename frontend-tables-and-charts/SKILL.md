@@ -701,8 +701,11 @@ grid 子项的 **automatic minimum size** 取 **content-based minimum size**，
 **两个反例，都是省略号永远不出现**：
 - 只写 `text-overflow: ellipsis` 而**不写 `overflow: hidden`** —— 默认 `overflow: visible`，规范说不生效，
   文字直接画到盒子外面（而不是被切成省略号）。
-- 写了 `overflow: hidden`，但**盒子的宽度仍由内容决定**（`min-width: auto` 那种情形）——
-  内容压根没有溢出，也就没有可截断的边界。
+- 写了 `overflow: hidden` + `ellipsis`，但**盒子的宽度仍由内容决定** —— 例如盒子是
+  `display: inline-block`、`width: max-content`，或者它压根不在栅格 / 弹性布局里。
+  ⚠️ **这一条最容易搞反**：在**栅格 / 弹性子项**上，`overflow: hidden` 恰恰会把自动最小值
+  **变成 0**（见上面的一手规范），所以那种情形下省略号**是会出现的** ——
+  别把"宽度由内容决定"和 `min-width: auto` 当成一回事。
 
 单元格上的现成写法见 [`references/table.css`](references/table.css) 的 `.ellipsis`。
 
