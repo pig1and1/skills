@@ -241,6 +241,8 @@ app-interface** 五个系统归纳。§2 尺寸表的**起点**来自它。
 | **施工路径从来没提到 §2 §7 §13 §14** —— 它们只能靠通读全文找到。§13/§14 是后加的，加的那一轮没有回头看路径 | **导航可达性是可验证的属性**：照着"第 1 步 → 第 8 步"走完，如果某一节**始终没被要求读过**，那一节等于不存在 —— 写得再对也不会被用上。已固化为检查器的第 7 项；拿上一个提交回放，它当场报出这四节。**新增一节，必须同时把它挂到某一步上。** |
 | 同一次检查里我先说不可达的是 **§0** §2 §7 §13 §14，后来才去逐个核对 —— 而 §0 **一直都在第 1 步的问题表里** | **不要从抽样推广**：我只量了 §13/§14，却把结论说成了 5 节。基于这个错数，我还在第 2 步加了一句与第 1 步重复的话，事后已撤。**先量全再下结论；说"我检查过了"时必须说得清检查的边界。** |
 | 检查器把 `meta/environment.md` §12 判成"悬空的内部节号"（文件名被反引号包着，正则只允许中间是空白） | **检查器报 FAIL 时，第一个假设应该是"检查器错了"**，然后手工去核实那个所谓的缺陷（这里 `environment.md` 的 §12 确实存在，引用是对的）。这是同一个检查器的第 4 次误报，四次同一个毛病：**靠字面匹配去认语义**。跨文件引用现在被列为"未校验"，而不是静默放过或假报失败。 |
+| **§13 引用「§9 的长标签截断 + `title`」，而 §9 里根本没有这条规则** —— 它只是「类别爆炸」那一行表格里的一句半话（讲的是图表类别标签），真正的写法（`overflow` / `nowrap` / `ellipsis`）**散在四个参考实现里**，正文从没把它立成规则 | **检查器只验"§9 存在"，不验"§9 真讲了这件事"** —— 交叉引用可以全部解析成功、却指向一段不存在的内容。这是继"冻结首列"之后**第二次**发现"规则只活在范本里"。**"引用能解析"和"引用有内容"是两件事。** |
+| 我在给施工路径挂 §号时，把「列宽显式」挂到了 **§2** —— 而 §2 全节没有一处讲列宽（它讲的是简洁、行高/内边距/字号、对齐、色彩、无障碍），列宽在 **§1** | **挂 §号时不能凭小节标题猜**：「简洁与尺寸」听起来像包含列宽，实际不含。**这是我自己在"修导航"那一轮引入的错误** —— 修一个缺陷时引入另一个，所以修完必须回头复核**每一个新加的指针分别指向什么**。 |
 
 **B 级 · 一手规范** —— §13 的机制出自 W3C CSS 工作组的源仓库
 [`w3c/csswg-drafts`](https://github.com/w3c/csswg-drafts)（原文，非转述）：
@@ -254,6 +256,22 @@ app-interface** 五个系统归纳。§2 尺寸表的**起点**来自它。
 > 内容的 `min-content`；一旦 `overflow` 不是 `visible`，规范说自动最小值**变成 0**。
 > 所以 `min-width: 0` 与 `overflow: hidden` **不是两种方案，是同一个机制的两条路径** ——
 > 实测三者（`min-width:0` / `overflow:hidden` / `overflow:auto`）的 track 宽度**完全相同**。
+
+**B 级 · 一手规范（续）—— 截断**：`text-overflow` 的定义在
+[`css-overflow-3/Overview.bs`](https://github.com/w3c/csswg-drafts/blob/main/css-overflow-3/Overview.bs)
+（规范自己注明它 reproduces the definition of the `text-overflow` property previously defined in
+`[[CSS-UI-3]]`, with no addition or modification）：
+
+| 项目 | 原文 |
+|---|---|
+| 属性定义 | `Name: text-overflow` / `Value: clip \| ellipsis` / `Initial: clip` / `Applies to: block containers` / `Inherited: no` |
+| **生效前提** | This property specifies rendering when inline content **overflows its end line box edge** in the inline progression direction of its block container element ("the block") **that has `overflow` other than `visible`**. |
+| 溢出的成因 | Text can overflow for example when it is prevented from wrapping (e.g. due to `white-space: nowrap` or a single word is too long to fit). |
+| 示例都给了宽度 | 规范的每个示例都显式写了宽度（`width: 9ch`、`width: 3.1em`、`width: 15em`） |
+
+> **"盒子要有确定宽度"不是规范里的一句独立要求，而是"溢出"这个前提的必然结果** ——
+> 盒子宽度由内容决定时，内容没有溢出可言。**这是本条里唯一属于推读的部分**；
+> 其余两条（`overflow` 必须不是 `visible`、`nowrap` 是溢出的成因）都是规范原句。
 
 **结论**：**断言必须能被证伪**——先确认它在坏的实现上真的会变红。
 这条比任何一条图表规则都更常救场。
