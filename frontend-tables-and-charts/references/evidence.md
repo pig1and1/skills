@@ -5,15 +5,38 @@
 
 **想知道"为什么要有这条规则"，读这里。日常施工不需要它。**
 
+## 先看证据等级，再看结论
+
+这里的每个来源都**可追溯**，但**可追溯不等于已核实** —— 这条区别值得写在最前面，因为
+本 skill 曾经栽在它上面：一段带链接的二手归纳被写成了"四个系统一致"，而其中一项连
+对应仓库都查不到。
+
+| 等级 | 含义 | 怎么用 |
+|---|---|---|
+| **A · 源码核实** | 我读过上游源码里那一行 | 可以直接照做 |
+| **B · 一手文档** | 权威方自己写的规范/教材 | 可以照做，留意版本 |
+| **C · 二手归纳** | 别人转述多家系统 | **只当起点**，用前自己核一遍 |
+| **D · 故障证据** | 某个项目的 issue/PR 里发生过 | 现象可信；**普适性要单独判断** |
+
+**D 类的 stars 通常极低**（本页引用的几个是 0–1★），**这不降低它的价值**：一条 issue
+只要现象可复现就是硬证据。但它改变了措辞 —— 不是"很多人踩过"，而是"某个几乎无人使用的
+项目踩过"。判据不同：
+
+- **规范/实现参考** → stars、fork、最近提交，衡量**可信度**（Ant Design 99.5k★、
+  Carbon 9.5k★、Polaris 6.2k★ 属此列）
+- **故障证据** → 不设 stars 门槛，改问"这是浏览器/平台原理，还是该项目的特殊性？"
+  （"未做 `devicePixelRatio` 缩放会模糊"是原理，普适；"Safari 快滚时粘性表头抖 1–2px"
+  是 WebKit 怪癖，不普适）
+
 ---
 
 ## 表格
 
-| 出处 | 症状 | 根因 | 规则 |
-|---|---|---|---|
-| [`srelens/srelens` #298](https://github.com/srelens/srelens/issues/298) | 滚动时列宽左右跳；**手动拖过一次列宽后永久消失** | `table-layout: auto` + 虚拟滚动，宽度按当前渲染的行推导 | §1 |
-| [`nesquena/hermes-webui` #5672](https://github.com/nesquena/hermes-webui/pull/5672) | 移动端滚动跳回；`scrollTop` 被 clamp 或重锚到远处行 | DOM 重建丢失 `content-visibility` 的尺寸记忆，退回写死的 `contain-intrinsic-size` | §1 |
-| [`OctoPunkIO/svelte-datatable` #13](https://github.com/OctoPunkIO/svelte-datatable/issues/13) | Safari 17 上虚拟滚动 + 粘性表头快滚时抖 1–2px | WebKit 怪癖，Chrome / Firefox 正常 | §1 |
+| 出处 | stars | 症状 | 根因 | 规则 |
+|---|---|---|---|---|
+| [`srelens/srelens` #298](https://github.com/srelens/srelens/issues/298) | 167 | 滚动时列宽左右跳；**手动拖过一次列宽后永久消失** | `table-layout: auto` + 虚拟滚动，宽度按当前渲染的行推导 | §1 |
+| [`nesquena/hermes-webui` #5672](https://github.com/nesquena/hermes-webui/pull/5672) | 18.3k | 移动端滚动跳回；`scrollTop` 被 clamp 或重锚到远处行 | DOM 重建丢失 `content-visibility` 的尺寸记忆，退回写死的 `contain-intrinsic-size` | §1 |
+| [`OctoPunkIO/svelte-datatable` #13](https://github.com/OctoPunkIO/svelte-datatable/issues/13) | **0** | Safari 17 上虚拟滚动 + 粘性表头快滚时抖 1–2px | WebKit 怪癖，Chrome / Firefox 正常 —— **不普适，别当通则** | §1 |
 
 **规范** —— [Table (Data Table / Data Grid) — Benchmark Spec](https://cdn.jsdelivr.net/npm/@hegemonart/get-design-done@1.60.1/reference/components/table.md)：
 从 **Carbon DataTable、Polaris DataTable、Atlassian DynamicTable、Ant Design Table、UUPM
@@ -30,18 +53,18 @@ app-interface** 五个系统归纳。§2 的尺寸表、"默认 48px 行高"、�
 
 ## 图表
 
-| 出处 | 症状 | 根因 | 规则 |
-|---|---|---|---|
-| [`Selftend/selftend` #2347](https://github.com/Selftend/selftend/issues/2347) · [#2346](https://github.com/Selftend/selftend/issues/2346) | 图表/组件**未预留空间**导致布局偏移 | 高度由内容决定 | §5 |
-| [`Selftend/selftend` #2341](https://github.com/Selftend/selftend/issues/2341) | 布局偏移是否该进 CI、能断言什么 | **CLS 可测量**，可作验收门槛 | §5 |
-| [`BenjaminSRussell/cozy-game` #58](https://github.com/BenjaminSRussell/cozy-game/issues/58) | Retina 上 canvas 模糊 | 未做 `devicePixelRatio` 缩放 | §5 |
-| [`askrjs/askr-charts` #30](https://github.com/askrjs/askr-charts/issues/30) | 默认分类色里有一对**相邻的红/绿** | 红绿色盲无法区分 | §11 |
-| [`crzyc98/planwise_navigator` #497](https://github.com/crzyc98/planwise_navigator/issues/497) | 调色板**未通过色觉审计**，最后维护两套 | 同上 | §11 |
+| 出处 | stars | 症状 | 根因 | 规则 |
+|---|---|---|---|---|
+| [`Selftend/selftend` #2347](https://github.com/Selftend/selftend/issues/2347) · [#2346](https://github.com/Selftend/selftend/issues/2346) | **1** | 图表/组件**未预留空间**导致布局偏移 | 高度由内容决定 | §5 |
+| [`Selftend/selftend` #2341](https://github.com/Selftend/selftend/issues/2341) | **1** | 布局偏移是否该进 CI、能断言什么 | **CLS 可测量**，可作验收门槛 | §5 |
+| [`BenjaminSRussell/cozy-game` #58](https://github.com/BenjaminSRussell/cozy-game/issues/58) | **0** | Retina 上 canvas 模糊 | 未做 `devicePixelRatio` 缩放 —— **原理问题，普适** | §5 |
+| [`askrjs/askr-charts` #30](https://github.com/askrjs/askr-charts/issues/30) | **1** | 默认分类色里有一对**相邻的红/绿** | 红绿色盲无法区分 —— **普适** | §11 |
+| [`crzyc98/planwise_navigator` #497](https://github.com/crzyc98/planwise_navigator/issues/497) | **0** | 调色板**未通过色觉审计**，最后维护两套 | 同上 | §11 |
 
-**规范（正确性）**
+**规范（正确性）** —— stars 用来衡量可信度，下面这些都在 3k 以上：
 
 - [Carbon — Axes and labels](https://github.com/carbon-design-system/carbon-website/blob/main/src/pages/data-visualization/axes-and-labels/index.mdx)
-  —— Y 轴基线判据：柱状/面积必须从 0，折线/散点不必。
+  （**Carbon 本体 9.5k★**）—— Y 轴基线判据：柱状/面积必须从 0，折线/散点不必。
 - [Avoiding Misleading Data Visualizations](https://github.com/LMK89/Machine-Learning-MD/blob/main/Data-Visualization/Avoiding%20Misleading%20Data%20Visualizations.md)
   —— 尺度选择与截断的后果。
 - [Carbon Charts](https://github.com/carbon-design-system/carbon-charts)（IBM，D3 + TypeScript）

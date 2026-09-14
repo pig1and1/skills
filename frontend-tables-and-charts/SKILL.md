@@ -197,10 +197,17 @@ export function render(host, rows, options = {}) {
 | 单元格横向 padding | 12px | **16px** | 20px |
 | 字号 | 13px | **14px** | 14px |
 
-> 这组数字不是估的：**Carbon、Polaris、Atlassian、Ant Design 四个系统在"默认 48px 行高、
-> 12/16px padding、13–14px 字号"上一致**。
-> **"紧凑"是给分析型仪表盘的特例，不是默认** —— 早先版本的 36px 行高 / 8px padding
-> 其实属于"很紧凑"，当默认用会让表格显得拥挤。
+> **这张表的证据等级 —— 不要把它读成"四家一致"的权威结论。**
+> 已经**在源码里核实过**的只有 Carbon：表头 `block-size: $spacing-09`（48px）、单元格
+> `padding-block: $spacing-05`（16px 上下），而它自己还分多档 header size。
+> Ant Design 核实到的是**有 large（默认）/ middle / small 三档**（`cellPaddingBlock*`），
+> **并没有一个"默认 48px"**。Polaris 只核实到仓库权威且活跃，**未**逐个核对文档数值。
+> 原始来源是一份第三方归纳文档（`@hegemonart/get-design-done`，**npm 包，无 stars 可查**）；
+> 其中**"Atlassian"那一项连对应仓库都查不到**。
+> 所以下面这组数字是**一个可用的起点**，不是规范原文——用之前先按你自己的表格核一遍。
+>
+> **"紧凑"是给分析型仪表盘的特例，不是默认** —— 36px 行高 / 8px padding 属于"很紧凑"，
+> 当默认用会让表格显得拥挤。（参考实现曾误用 36px 并自称符合本节，已统一为 48px。）
 
 "好看"几乎全部来自**一致的节奏**，不是任何单点装饰。
 
