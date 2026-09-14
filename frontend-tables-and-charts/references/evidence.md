@@ -150,6 +150,33 @@ app-interface** 五个系统归纳。§2 尺寸表的**起点**来自它。
 > SC 原文没有点名这三个名字 —— 所以"用它们"是**实现选择**，不是规范的字面要求。
 > 别把机制当成规范原文引用。
 
+**B 级 · 一手规范（续）—— 进度指示**：
+
+| 来源 | 原文（截取） |
+|---|---|
+| WCAG 2.1 [Understanding SC 4.1.3](https://www.w3.org/WAI/WCAG21/Understanding/status-messages.html)（`w3c/wcag` 的 `understanding/21/status-messages.html`） | a status message … provides information to the user on the success or results of an action, **on the waiting state of an application, on the progress of a process**, or on the existence of errors —— 例子里有 *"a dynamic progress bar to indicate the status of an upgrade"* |
+| WAI-ARIA [`progressbar`](https://github.com/w3c/aria)（`w3c/aria` 的 `index.html`） | **displays the progress status for tasks that take a long time** … Authors MAY set `aria-valuemin` and `aria-valuemax` to indicate the minimum and maximum progress indicator values |
+
+> **等级要分两半说，别混。**
+> **B 级（规范要求）**：4.1.3 把"一个过程的**进度**"算作状态消息，WAI-ARIA 给了它
+> 对应的角色与取值属性 —— 所以**进度指示是状态消息的一种，不是"可选的好看"**。
+> **③ 经验默认值（不是规范要求）**：**"知道总量就别只转圈"**。
+> 4.1.3 只要求可被程序化识别，**没有任何一条 SC 要求"可测量时必须用确定进度"**。
+> 把它写成规范要求，就是又一次"给经验编一个出处"。
+
+**怎么判断"可不可测"**（这是**定义**，不需要出处 —— 它由"总量是否已知"直接决定）：
+
+- 遍历一个已知长度的集合（导入 N 行里的第 k 行）→ 可测量；
+- 等待一个没有长度概念的操作（一次可能慢也可能快的请求）→ **不可测量**。
+- **不可测量时画百分比，就是在编** —— 进度条会冲到一个数然后长时间不动，甚至往回跳。
+
+> 判断"可不可测"看的是**知不知道总量**，不是"这个操作久不久"。久但没总量，
+> 依然该用不确定态；短但有总量，依然该给数字。
+>
+> **注意轴不要混**：本文件的 `A/B/C/D` 是**证据等级**，而主文件里的 `①②③` 是
+> **"数字分三种"**（有出处 / 平台常量 / 经验默认值）。一个讲"这条有多可信"，
+> 一个讲"这条是哪一类"。上一条标了 ③，那是三分法；它同时是 B 级，那是等级法。
+
 **D 级 · 故障证据** —— 过期异步响应覆盖更新的那一次。**四条同形状的公开记录**：
 
 | 仓库 | 现象 |

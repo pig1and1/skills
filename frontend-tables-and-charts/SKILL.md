@@ -696,6 +696,34 @@ grid 子项的 **automatic minimum size** 取 **content-based minimum size**，
 > ⚠️ **一个真实的实现陷阱**：状态文字**不要在任何 `finally` / 收尾逻辑里被清空** ——
 > **"设置了"和"留到了"是两件事**。参考实现第一版就是这么写坏的，记录见 `evidence.md`。
 
+### 「加载中」有两种，指示器必须匹配
+
+**故障 —— 两个方向都会错**：
+
+- **知道总量却只转圈**：一个 30 秒的导入只显示一个不动的圈，用户**无法区分"在跑"和"卡死了"**。
+  系统明明知道还剩多少，却把这个信息丢掉了。
+- **不知道总量却画百分比**：进度条冲到 90% 再长时间不动，甚至往回跳 —— **那是在编。**
+
+**判据**：**先问"总工作量是不是已知的"，再选指示器。**
+
+| 总量已知？ | 用什么 | 不要用什么 |
+|---|---|---|
+| **知道**（N 行里的第 k 行） | `role="progressbar"` + `aria-valuenow` / `aria-valuemin` / `aria-valuemax`，并把 `k / N` 写成文字 | 不给数字的转圈 |
+| **不知道**（等待一个没有长度概念的操作） | 不确定态：`aria-busy` + 一句"在做什么"的文案 | **百分比，哪怕是估算的** |
+
+**一手规范**（逐字原文见 `evidence.md`）：
+
+- **WCAG 2.1 SC 4.1.3 的解读**把**进度**明确算作状态消息：
+  *"…on the waiting state of an application, **on the progress of a process**, or on the existence
+  of errors…"*，并举了 *"a dynamic progress bar to indicate the status of an upgrade"* 作为例子。
+- **WAI-ARIA** 对 `progressbar` 的定义：*"displays the progress status for tasks that **take a long
+  time**"*，且 *"Authors MAY set `aria-valuemin` and `aria-valuemax` to indicate the minimum and
+  maximum progress indicator values."*
+
+> ⚠️ **这一条来自一次独立验证，而不是我想出来的。** 一个没有上下文的 AI 照本 skill 做导入页时，
+> 自己加了 `role="progressbar"` 与 `aria-valuenow` —— 而 §14 **从头到尾没提过这两样**。
+> 也就是说，它是靠自己的知识补上的。**规则没覆盖到、而使用者需要，这就是缺口。**
+
 ### 字段错误：说清是哪一个、为什么、怎么办
 
 **一手规范**（逐字引自 [w3c/wcag](https://github.com/w3c/wcag) 的 SC 源文件）：
