@@ -140,6 +140,43 @@ for (const name of skills) {
     if (unreached.length) fail(`施工路径到不了这些节（等于没写）: ${unreached.map(n => '§' + n).join(', ')}`)
     else ok(`施工路径覆盖全部 ${secs.size} 个节`)
   }
+
+  /* ---- 8. 描述里的每一项声称，正文里都要有落点 ---- */
+  // 判据出自知识库的「教训九」：把描述里每一句"我能处理 X"抽出来，逐个去正文找对应的节；
+  // 找不到的就是**过度声明** —— 会让 skill 在它答不上来的任务上被加载，那比不触发更糟。
+  //
+  // ⚠️ 这里用手写的映射表，而不是通用做法。通用做法是"正文里只出现在描述中的词"，
+  //    实测跑出 **42 个命中，只有 1 个是真的**（`sparklines`）：因为这个 skill 的
+  //    description 是英文而正文是中文，`alignment` / `density` / `headers` 在正文里
+  //    全都以中文形式存在。**41:1 的噪声等于没有这个检查。**
+  //    所以映射表是手工维护的：**改了 description 就要改它**，否则这项检查会安静地失效。
+  const CLAIMS = [
+    ['列宽 column widths', /列宽|table-layout/i],
+    ['对齐 alignment', /对齐/],
+    ['行密度 row density', /行高/],
+    ['粘性表头 sticky headers', /sticky|粘性/i],
+    ['hover / selection / focus', /hover|选中|:focus/i],
+    ['虚拟滚动 virtual scrolling', /虚拟滚动/],
+    ['主题 token', /token/i],
+    ['折线 / 柱状 / 面积', /折线|柱状|面积/],
+    ['轴范围与基线', /基线|从 0/],
+    ['图表尺寸 chart sizing', /容器高度|高度/],
+    ['DPR / canvas', /devicePixelRatio|DPR/],
+    ['页面级四状态', /还没查|未查询/],
+    ['栅格被撑破', /min-width: 0/],
+    ['抖动 / 列漂移 / 滚动跳回', /跳回|抖动|列宽随滚动/],
+    ['加载后布局位移', /预留|高度/],
+    ['高分屏模糊', /模糊/],
+    ['误导性坐标轴', /误导/],
+    ['迷你图 sparkline', /sparkline|迷你图/i],
+  ]
+  const descLine = (skill.match(/^description:.*$/m) || [''])[0]
+  const bodyText = skill.replace(/^description:.*$/m, '')
+  const uncovered = CLAIMS
+    .filter(([, re]) => re.test(descLine) && !re.test(bodyText))
+    .map(([name]) => name)
+  if (uncovered.length) fail(`描述声称覆盖、正文却没有落点: ${uncovered.join(', ')}`)
+  else ok(`描述的 ${CLAIMS.length} 项声称都有正文落点`)
 }
 
 console.log(`\n${fails ? fails + ' 项失败' : '全部通过'}`)
