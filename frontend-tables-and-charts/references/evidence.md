@@ -53,6 +53,16 @@ app-interface），我**一家都没核**。后来真去查：其中一项连仓
 | [`srelens/srelens` #298](https://github.com/srelens/srelens/issues/298) | 167 | 滚动时列宽左右跳；**手动拖过一次列宽后永久消失** | `table-layout: auto` + 虚拟滚动，宽度按当前渲染的行推导 | §1 |
 | [`nesquena/hermes-webui` #5672](https://github.com/nesquena/hermes-webui/pull/5672) | 18.3k | 移动端滚动跳回；`scrollTop` 被 clamp 或重锚到远处行 | DOM 重建丢失 `content-visibility` 的尺寸记忆，退回写死的 `contain-intrinsic-size` | §1 |
 | [`OctoPunkIO/svelte-datatable` #13](https://github.com/OctoPunkIO/svelte-datatable/issues/13) | **0** | Safari 17 上虚拟滚动 + 粘性表头快滚时抖 1–2px | WebKit 怪癖，Chrome / Firefox 正常 —— **不普适，别当通则** | §1 |
+| [`AvaloniaUI/Avalonia` #21788](https://github.com/AvaloniaUI/Avalonia/issues/21788) | **31.5k** | 宽表横向滚动时看不到行标识 | 表头固定了列的含义，**行的身份没人管** | §1 |
+| [`elettro/stashbox` #399](https://github.com/elettro/stashbox/pull/399) | 1 | 要求冻结 Song Analytics 的首列 | 同上 | §1 |
+| [`pablogranate/basket` #47](https://github.com/pablogranate/basket/issues/47) | **0** | 要求把两列冻结成 pinned left block | 同上 | §1 |
+| [`mateuszwu/football_app` #229](https://github.com/mateuszwu/football_app/issues/229) | **0** | 横向内容被藏住 → 统计表不可用 | 同上 | §1 |
+| [`HarperFast/studio` #1692](https://github.com/HarperFast/studio/pull/1692) | 5 | 把宽表的横向滚动**关在表格自己里面**（已关闭 = 已修） | 同上 | §1 |
+
+> **最后五行是一组很好的 D 类样本**：stars 从 **0 到 31.5k** 都有。
+> 一个主流 UI 框架把它做成了一等 API（`FrozenColumnCount`），四个小项目各自撞上同一个问题 ——
+> **五条独立记录描述同一个现象，这才是"普适"的依据，不是任何一条的 star 数。**
+> 反过来，如果只有 Avalonia 一条，那可能只是框架设计者的偏好。
 
 **C 级 · 二手归纳（用前自己核）** ——
 [Table (Data Table / Data Grid) — Benchmark Spec](https://cdn.jsdelivr.net/npm/@hegemonart/get-design-done@1.60.1/reference/components/table.md)：
