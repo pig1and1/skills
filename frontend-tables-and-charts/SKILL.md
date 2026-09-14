@@ -106,24 +106,45 @@ export function render(host, rows, options = {}) {
 
 ## 参照标准：拿什么当尺子
 
-规则需要参照物。**完整出处与"这条规则为什么存在"在 [`references/evidence.md`](references/evidence.md)**；
-这里只说**动手时该对照谁**。
+规则需要参照物。**完整出处、stars 与证据等级在 [`references/evidence.md`](references/evidence.md)**；
+这里只说**动手时该对照谁，以及每一类来源该怎么用**。
+
+### 先分清来源类型 —— 它们的判据不一样
+
+| 类型 | 例子 | 判据 |
+|---|---|---|
+| **标准原文** | [W3C ARIA](https://github.com/w3c/aria)（752★）、[WCAG](https://github.com/w3c/wcag)（1.5k★） | **权威性**。**stars 在这里无关** —— WCAG 只有 1.5k★，但它就是标准本身 |
+| **设计系统** | Ant Design 99.5k★ · MUI 99.0k★ · Fluent 20.3k★ · Primer 13.0k★ · Carbon 9.5k★ · Polaris 6.2k★ | **stars + 最近提交**，衡量可信度 |
+| **教材 / 实践者** | Wilke 3.5k★ · FT Chart Doctor 3.3k★ · Datawrapper Academy | **作者声誉 + stars** |
+| **二手归纳** | 第三方把多家系统汇总成一份文档 | **只当起点**，用前自己按源码核一遍 |
+| **故障证据** | 某个项目的 issue / PR | **不设 stars 门槛**；改问"是平台原理，还是该项目的特殊性" |
+
+**stars 是选来源的判据，不是判断某条断言真伪的判据。** Ant Design 有 99.5k★ 说明它权威，
+但"它的默认行高是多少"仍要打开源码才能确认（结果是三档，`large` 为默认）。
 
 ### 表格
 
-- **规格** —— [Benchmark Spec](https://cdn.jsdelivr.net/npm/@hegemonart/get-design-done@1.60.1/reference/components/table.md)：
-  从 Carbon / Polaris / Atlassian / Ant Design / UUPM 五个系统归纳。§2 的尺寸表与无障碍契约出自它。
-  **它附了可 grep 的检测命令**，做完直接跑。
-- **实物** —— [`openstatusHQ/data-table-filters`](https://github.com/openstatusHQ/data-table-filters)（2252★，MIT）。
+- **尺寸与密度** —— 直接看设计系统的表格规范，**不要经过任何转述**：
+  [Ant Design Table](https://github.com/ant-design/ant-design/tree/master/components/table)（**99.5k★**，
+  三档 `large`（默认）/ `middle` / `small`，见 `style/size.ts`）、
+  [Carbon DataTable](https://github.com/carbon-design-system/carbon/tree/main/packages/styles/scss/components/data-table)（**9.5k★**，
+  表头 `block-size: $spacing-09` = 48px，单元格 `padding-block: $spacing-05` = 16px）、
+  [Polaris DataTable](https://github.com/Shopify/polaris/tree/main/polaris-react/src/components/DataTable)（**6.2k★**）。
+  **注意：它们的"默认"并不互相一致** —— §2 给的是一组可用起点，不是共识。
+- **无障碍** —— [WAI-ARIA APG — Grid](https://www.w3.org/WAI/ARIA/apg/patterns/grid/)（**标准原文**，不是任何系统的转述）。
+- **实物** —— [`TanStack/table`](https://github.com/TanStack/table)（**28.4k★**，无样式的表头/虚拟化内核）、
+  [`openstatusHQ/data-table-filters`](https://github.com/openstatusHQ/data-table-filters)（2.3k★，MIT，shadcn + TanStack）。
 
 ### 图表
 
-- **选型** —— [FT Chart Doctor](https://github.com/Financial-Times/chart-doctor) 的 *Visual Vocabulary*：
-  九类关系（deviation · correlation · ranking · distribution · change over time · part-to-whole ·
-  magnitude · spatial · flow）。**先定类别，再选图形**。
+- **选型** —— [FT Chart Doctor](https://github.com/Financial-Times/chart-doctor)（**3.3k★**）的
+  *Visual Vocabulary*：九类关系（deviation · correlation · ranking · distribution ·
+  change over time · part-to-whole · magnitude · spatial · flow）。**先定类别，再选图形**。
 - **正确性** —— [Carbon — Axes and labels](https://github.com/carbon-design-system/carbon-website/blob/main/src/pages/data-visualization/axes-and-labels/index.mdx)（Y 轴基线判据）。
 - **手艺** —— [Datawrapper Academy](https://www.datawrapper.de/academy) 的折线图与缺失数据两篇，
-  以及 [Claus Wilke 的开源教材](https://github.com/clauswilke/dataviz)。**视觉的细节主要来自这两处。**
+  以及 [Claus Wilke 的开源教材](https://github.com/clauswilke/dataviz)（**3.5k★**）。**视觉的细节主要来自这两处。**
+- **实现对照** —— [`d3/d3`](https://github.com/d3/d3)（**113.7k★**，比例尺与刻度的权威实现）、
+  [`observablehq/plot`](https://github.com/observablehq/plot)（5.4k★，图形语法的现代写法）。
 
 ### 一句忠告
 
@@ -216,11 +237,13 @@ export function render(host, rows, options = {}) {
 
 ### 无障碍契约（几条硬性的）
 
-表格最容易在这里失分，因为它看起来"只是个表格"。以下来自 WAI-ARIA 与四家设计系统的一致要求：
+表格最容易在这里失分，因为它看起来"只是个表格"。下面几条来自 **WAI-ARIA APG 的标准原文**
+（不是任何系统的转述），另有若干是多家设计系统在实践中的一致做法 —— 前者是**要求**，后者是**惯例**，
+两者分量不同：
 
-| 要求 | 为什么 |
-|---|---|
-| `<table>` 必须有 **`<caption>`** 或 `aria-label` | 屏幕阅读器靠它播报"这是什么表" |
+| 要求 | 为什么 | 性质 |
+|---|---|---|
+| `<table>` 必须有 **`<caption>`** 或 `aria-label` | 屏幕阅读器靠它播报"这是什么表" | 要求 |
 | 每个 `<th>` 都要 **`scope="col"`** | 缺了它 AT 无法按列导航 —— **最常被漏掉的一条** |
 | 可排序列要有 **`aria-sort="ascending\|descending\|none"`** | 只画一个箭头图标，辅助技术完全感知不到 |
 | 选中行要在 `<tr>` 上写 **`aria-selected="true"`** | 只用 CSS class 表示选中，AT 看不见 |

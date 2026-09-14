@@ -38,12 +38,20 @@
 | [`nesquena/hermes-webui` #5672](https://github.com/nesquena/hermes-webui/pull/5672) | 18.3k | 移动端滚动跳回；`scrollTop` 被 clamp 或重锚到远处行 | DOM 重建丢失 `content-visibility` 的尺寸记忆，退回写死的 `contain-intrinsic-size` | §1 |
 | [`OctoPunkIO/svelte-datatable` #13](https://github.com/OctoPunkIO/svelte-datatable/issues/13) | **0** | Safari 17 上虚拟滚动 + 粘性表头快滚时抖 1–2px | WebKit 怪癖，Chrome / Firefox 正常 —— **不普适，别当通则** | §1 |
 
-**规范** —— [Table (Data Table / Data Grid) — Benchmark Spec](https://cdn.jsdelivr.net/npm/@hegemonart/get-design-done@1.60.1/reference/components/table.md)：
+**C 级 · 二手归纳（用前自己核）** ——
+[Table (Data Table / Data Grid) — Benchmark Spec](https://cdn.jsdelivr.net/npm/@hegemonart/get-design-done@1.60.1/reference/components/table.md)：
+**一个 npm 包里的 markdown，没有 stars 可查**（所以它过不了"可信度"这道门槛）。它**自称**
 从 **Carbon DataTable、Polaris DataTable、Atlassian DynamicTable、Ant Design Table、UUPM
-app-interface** 五个系统归纳。§2 的尺寸表、"默认 48px 行高"、无障碍契约、以及两条禁令
-（不要动画列宽、不要在表格分区上用 `display: contents`）都出自它。
+app-interface** 五个系统归纳。§2 尺寸表的**起点**来自它。
 
-它的**写法**也值得学：每条断言附来源，每个违规给可 grep 的检测命令，每个反例说明**为什么失败**和**怎么修**。
+**核实结果（2026-09-13 查源码）**：Carbon 是 `block-size: $spacing-09`（48px）表头 +
+`padding-block: $spacing-05`（16px）单元格，且**分多档 header size**；Ant Design 是
+**三档**（`cellPaddingBlock` / `…MD` / `…SM`，注释写明 *"large size by default"*），
+**根本没有"默认 48px"**；**"Atlassian"那一项，`atlassian/design-system` 仓库不存在**。
+所以它那句"五家一致"**不能当结论用**，只能当一个待核实的线索。
+
+它的**写法**仍值得学：每条断言附来源，每个违规给可 grep 的检测命令，每个反例说明
+**为什么失败**和**怎么修** —— 这个 skill 的自检命令就是照它学的。
 
 **实现参考** —— [`openstatusHQ/data-table-filters`](https://github.com/openstatusHQ/data-table-filters)
 （2252★ · MIT · TypeScript）：shadcn/ui + TanStack Table。看它的 issue/PR 记录比读代码更快，
