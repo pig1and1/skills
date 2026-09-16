@@ -1055,6 +1055,24 @@ grid 子项的 **automatic minimum size** 取 **content-based minimum size**，
 而 `file://` 的权限模型恰好是各浏览器历史上分歧最大的地方之一。
 **它是常量，但常量也有作用域。**
 
+### 同一道边界的另一半：模块脚本（同样实测）
+
+一个 `<script type="module">` 只要**需要抓取任何东西**，`file://` 下就会被挡：
+
+| 写法 | `file://` |
+|---|---|
+| **内联** `<script type="module">`，**没有** `import` | ✅ 能跑 |
+| 内联 module，`import './x.js'` | ❌ **被挡**（`origin 'null'`） |
+| `<script type="module" src="./x.js">` | ❌ **被挡** |
+| 普通 `<script src="./x.js">`（对照） | ✅ 能跑 |
+
+**所以单文件页面要么把代码全内联，要么就别用 module。**
+（`references/query-console.html` 正是"内联 module、无 import"—— 实测在 `file://` 下正常工作。）
+
+⚠️ **这类失败不会抛未捕获异常** —— 它只出现在**浏览器日志**里（`Access to script … blocked`）。
+所以 **"页面没报错"不等于"脚本跑了"**：看控制台，别只看异常。
+**而这一条我是靠"点一下按钮看有没有反应"才发现的** —— 只查异常会漏掉整类失败。
+
 ### 哪写状态要进 URL
 
 **当前视图 + 全部筛选条件。** 一条都不能少。

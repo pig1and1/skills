@@ -65,12 +65,28 @@ try {
       const s = (m.params.args || []).map(a => a.value || a.description || '').join(' ')
       if (s) errors.push('console.error: ' + s)
     }
+    /* ⚠️ **还要听 Log 域。** 模块脚本 / 资源加载被挡（`file://` 下的 CORS）**不抛未捕获异常**，
+     * 它只出现在浏览器日志里 —— 只监听 Runtime 会**整类失败都看不见**。
+     * 这条是实测出来的：`<script type="module" src="…">` 在 `file://` 下被挡时，
+     * Runtime 一声不响，Log 里有一句 `Access to script … blocked`。
+     *
+     * ⚠️ **但只收 `network` / `security` 两类。** 第一版收全部 `level === 'error'`，
+     * 结果 `dirty-data-cases.html` 当场报红 —— 而那个页面的**全部意义**就是渲染"朴素实现算出的
+     * NaN 路径"，`<path> attribute d: Expected number, "M4.0 NaN"` 是它**该有**的输出。
+     * **一个故意演示坏输出的页面，会合法地产生错误。**
+     * 我要补的盲区是"**资源没能加载**"，那是 `network` / `security`；渲染警告是另一类。 */
+    if (m.method === 'Log.entryAdded' && m.params.entry.level === 'error' &&
+        (m.params.entry.source === 'network' || m.params.entry.source === 'security')) {
+      errors.push(`log[${m.params.entry.source}]: ` + m.params.entry.text)
+    }
     if (m.id && pending.has(m.id)) {
       const { res, rej } = pending.get(m.id); pending.delete(m.id)
       m.error ? rej(new Error(m.error.message)) : res(m.result)
     }
   }
-  await send('Page.enable'); await send('Runtime.enable')
+  // Log.enable 必须开，否则上面那个 Log.entryAdded 永远不来 —— **加了监听却没开域，
+  // 是一类很安静的假通过**（监听器在，条件永远不成立）。
+  await send('Page.enable'); await send('Runtime.enable'); await send('Log.enable')
   await send('Emulation.setDeviceMetricsOverride', { width: 1400, height: 2000, deviceScaleFactor: 1, mobile: false })
 
   console.log('')
