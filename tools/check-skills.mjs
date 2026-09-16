@@ -33,9 +33,15 @@ const ok = (msg) => console.log('  ok    ' + msg)
  *
  *  **每加一条排除规则，都可能引入一种新的漏报。** 排除规则要盯的是
  *  "这段文字是不是在**别的语境**里出现"（URL / 注释），不是"它长得像不像代码"。 */
-function stripNoise(text, { comments = false } = {}) {
+function stripNoise(text, { comments = false, templates = false } = {}) {
   let t = text.replace(/https?:\/\/[^\s)\]"'<>]+/g, ' ')
   if (comments) t = t.replace(/<!--[\s\S]*?-->/g, ' ')
+  /* 模板字符串里的内容**不是这个文件自己的代码**，是它生成的产物。
+   * 实例：`linechart-check.mjs` 会写一个 HTML 交给浏览器，里面有一行
+   * `import { … } from './LineChart.js'` —— 那是**产物**的相对路径，
+   * 不是这个脚本的 import。（2026-09-14 第 5 次误报，同一个毛病：分不清代码与数据。）
+   * 只做保守匹配：反引号成对才剥。匹配不上就退回原样。 */
+  if (templates) t = t.replace(/`[^`]*`/g, ' ')
   return t
 }
 
@@ -102,7 +108,8 @@ for (const name of skills) {
 
   /* ---- 5. references 里的相对 import / require 都能解析 ---- */
   for (const f of present.filter(x => /\.(tsx?|mjs|js)$/.test(x))) {
-    const t = stripNoise(readFileSync(join(refDir, f), 'utf8'))
+    // templates: true —— 这些脚本会**生成 HTML**，产物里的 import 不是它自己的 import
+    const t = stripNoise(readFileSync(join(refDir, f), 'utf8'), { templates: true })
     for (const m of t.matchAll(/(?:from|require\()\s*['"](\.\/[^'"]+)['"]/g)) {
       if (!existsSync(join(refDir, m[1]))) fail(`${f} 里 import 了不存在的 ${m[1]}`)
     }
