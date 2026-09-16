@@ -122,6 +122,7 @@ app-interface** 五个系统归纳。§2 尺寸表的**起点**来自它。
 | [`Selftend/selftend` #2341](https://github.com/Selftend/selftend/issues/2341) | **1** | 布局偏移是否该进 CI、能断言什么 | **CLS 可测量**，可作验收门槛 | §5 |
 | [`BenjaminSRussell/cozy-game` #58](https://github.com/BenjaminSRussell/cozy-game/issues/58) | **0** | Retina 上 canvas 模糊 | 未做 `devicePixelRatio` 缩放 —— **原理问题，普适** | §5 |
 | [`askrjs/askr-charts` #30](https://github.com/askrjs/askr-charts/issues/30) | **1** | 默认分类色里有一对**相邻的红/绿** | 红绿色盲无法区分 —— **普适** | §11 |
+| **本机独立验证的产物**（2026-09-14，`examples/order-console/`） | — | **"真实的 0"与"缺测"画成一样**：把连续 0 单的日子当缺口断开，或把稀疏上报补全成 0 | 缺席**既可能是没事件、也可能是没采到**，**数据本身分辨不了** —— 它不是能从数据推出来的判断，是必须问出来的**口径** | §9 |
 | [`crzyc98/planwise_navigator` #497](https://github.com/crzyc98/planwise_navigator/issues/497) | **0** | 调色板**未通过色觉审计**，最后维护两套 | 同上 | §11 |
 
 **规范（正确性）** —— 等级 B，**stars 只作参考**：标准原文和官方规范的 star 往往不高，
