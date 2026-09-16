@@ -177,6 +177,39 @@ for (const name of skills) {
     .map(([name]) => name)
   if (uncovered.length) fail(`描述声称覆盖、正文却没有落点: ${uncovered.join(', ')}`)
   else ok(`描述的 ${CLAIMS.length} 项声称都有正文落点`)
+
+  /* ---- 9. 参考实现的字号必须落在 §11 的阶梯上 ---- */
+  // 为什么值得机检：阶梯是 2026-09-14 才立的，立之前五个参考页面里散着
+  // 11.5 / 12.5 / 16 / 17 / 18 / 20 —— **同一件事（正文字号）在三个文件里有三个值**。
+  // 这种漂移人眼盯不住，所以把六档写进检查器。
+  //
+  // ⚠️ 例外是**刻意的**，正文里写明了理由：`.glyph` 的 16px 是**图标尺寸**，不是文字；
+  //    按钮的 12.5px 属于**控件外观**，而那个维度本 skill 还没覆盖。
+  //    **阶梯管的是内容层级，不是所有 `font-size`** —— 所以用白名单，而不是把值删干净。
+  const RUNGS = [19, 15, 14, 13, 12, 11]
+  const SCALE_EXCEPTIONS = [
+    ['query-console.html', 16],                 // .glyph —— 图标，不是文字
+    ['stacked-bars-average-line.html', 12.5],   // .tools button —— 控件外观（未覆盖的维度）
+  ]
+  const offScale = []
+  const usedExceptions = new Set()
+  for (const f of present.filter(x => /\.(css|html|ts)$/.test(x))) {
+    const t = readFileSync(join(refDir, f), 'utf8')
+    for (const m of t.matchAll(/font-size:\s*([\d.]+)px/g)) {
+      const v = Number(m[1])
+      if (RUNGS.includes(v)) continue
+      const ex = SCALE_EXCEPTIONS.find(([ef, ev]) => ef === f && ev === v)
+      if (ex) { usedExceptions.add(`${ex[0]} ${ex[1]}px`); continue }
+      offScale.push(`${f} ${v}px`)
+    }
+  }
+  if (offScale.length) {
+    fail(`字号不在 §11 的阶梯上（只有 ${RUNGS.join(' / ')}）: ${[...new Set(offScale)].join(', ')}`)
+  } else {
+    // 例外数量按**本 skill 实际用到的**报，否则没有 references 的 skill 也会说"另有 2 处"
+    const note = usedExceptions.size ? `（另有 ${usedExceptions.size} 处已声明的例外: ${[...usedExceptions].join(', ')}）` : ''
+    ok(`参考实现的字号都落在 §11 的阶梯上${note}`)
+  }
 }
 
 console.log(`\n${fails ? fails + ' 项失败' : '全部通过'}`)
