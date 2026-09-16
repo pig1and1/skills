@@ -57,6 +57,11 @@
            border-radius:10px; padding:11px 13px 7px; }
   .chart-wrap { position:relative; contain:layout paint; }
   .chart-wrap svg { display:block; width:100%; height:100%; }
+  /* 直方图的端点标签走 HTML：那张 SVG 用了 preserveAspectRatio="none"，
+     塞在里面的 SVG 文本元素会被横向拉伸 —— 正是 §12 那条规则拦的东西。 */
+  .hist-axis { position:absolute; left:0; right:0; bottom:6px; display:flex;
+               justify-content:space-between; font-size:11px; color:var(--chart-label);
+               pointer-events:none; }
   .ylabels { position:absolute; left:0; top:0; bottom:0; width:52px; pointer-events:none; }
   .ylabels span { position:absolute; right:7px; transform:translateY(-50%); font-size:11px;
                   color:var(--chart-label); font-variant-numeric:tabular-nums; white-space:nowrap; }
@@ -345,11 +350,12 @@
       var py = Math.round(PT + (plotH * g) / 2) + 0.5;
       out.push('<line x1="' + PL + '" y1="' + py + '" x2="' + (W - PR) + '" y2="' + py + '" stroke="var(--chart-grid)" stroke-width="1"/>');
     }
-    out.push('<text x="' + PL + '" y="' + (H - 6) + '" font-size="11" fill="var(--chart-label)">20 分</text>');
-    out.push('<text x="' + (W - PR) + '" y="' + (H - 6) + '" text-anchor="end" font-size="11" fill="var(--chart-label)">100 分</text>');
+    // 端点标签**不放 SVG 里** —— 这张图的 viewBox 配 preserveAspectRatio="none"，
+    // 塞在里面的 SVG 文本元素会跟着被横向拉伸。改成绝对定位的 HTML。
     mount.insertAdjacentHTML('afterbegin',
       '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" ' +
-      'aria-label="分数分布直方图">' + out.join('') + '</svg>');
+      'aria-label="分数分布直方图">' + out.join('') + '</svg>' +
+      '<div class="hist-axis"><span>20 分</span><span>100 分</span></div>');
   }
 
   // ================================================================ 渲染
@@ -359,6 +365,8 @@
     if (svg) svg.remove();
     var yl = mount.querySelector('.ylabels');
     if (yl) yl.remove();
+    var ha = mount.querySelector('.hist-axis');
+    if (ha) ha.remove();
   }
 
   var mainGeom = null;
@@ -510,9 +518,9 @@
     var px = (mainGeom.x(p.t) / mainGeom.W) * g.box.width;
 
     var ch = el('cross-main');
-    ch.style.display = ''; ch.style.left = px.toFixed(1) + 'px';
+    ch.style.display = 'block'   // '' 会回落到 CSS 的 display:none（§8 那个坑）; ch.style.left = px.toFixed(1) + 'px';
     var tip = el('tip-main');
-    tip.style.display = '';
+    tip.style.display = 'block'   // '' 会回落到 CSS 的 display:none（§8 那个坑）;
     tip.innerHTML = fmtTime(p.t) + '<br>均值 <b>' + p.avg.toFixed(1) + '</b>　采样 <b>' + p.n + '</b>';
     tip.style.left = Math.min(g.box.width - 150, px + 12).toFixed(1) + 'px';
     tip.style.top = '10px';

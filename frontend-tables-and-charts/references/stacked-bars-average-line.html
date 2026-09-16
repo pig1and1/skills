@@ -468,7 +468,7 @@
       }).join('') +
       '<div class="r" style="margin-top:5px"><i style="background:var(--accent)"></i>平均段高<b>' + d.avg.toFixed(1) + '</b></div>' +
       '<div class="r"><i style="background:transparent"></i>合计<b>' + d.total + '</b></div>';
-    tip.style.display = '';
+    tip.style.display = 'block'   // '' 会回落到 CSS 的 display:none（§8 那个坑）;
 
     var box = chart.getBoundingClientRect(), svgBox = chart.querySelector('svg').getBoundingClientRect();
     var px = ((PL + (VB_W - PL - PR) / RAW.length * (i + .5)) / VB_W) * svgBox.width;
