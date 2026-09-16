@@ -288,7 +288,7 @@
     out.push('<path d="' + area + ' L' + inner.right + ' ' + (PT + plotH) + ' L' + inner.left + ' ' + (PT + plotH) + ' Z" fill="var(--chart-band)" opacity="0.10"/>');
     out.push('<path d="' + area + '" fill="none" stroke="var(--chart-band)" stroke-width="1.6" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>');
 
-    if (opts.showAvg && points.length > 12) {
+    if (state.showAvg && points.length > 12) {
       var ma = movingAverage(points, 24);
       var path = 'M' + ma.map(function (p) { return x(p.t).toFixed(1) + ' ' + y(p.v).toFixed(1); }).join(' L');
       out.push('<path d="' + path + '" fill="none" stroke="var(--chart-alt)" stroke-width="1.6" stroke-dasharray="5 3" vector-effect="non-scaling-stroke" opacity="0.9"/>');
