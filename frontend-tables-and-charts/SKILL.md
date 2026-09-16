@@ -1,6 +1,6 @@
 ---
 name: frontend-tables-and-charts
-description: Use when building or restyling a frontend data table OR chart — column widths, alignment, row density, sticky headers, hover/selection/focus states, virtual scrolling, theme tokens, line/bar/area charts, axis ranges and baselines, chart sizing, DPR-correct canvas — or when a page-level data region's four states (not-yet-queried / loading / empty / failed) are conflated or not announced to assistive tech, or a grid or flex child is being burst open by wide contents such as a table — or when diagnosing table jitter, drifting columns, scroll jump-back, layout shift after a chart loads, blurry charts, or misleading axes. 触发场景：前端表格 / 数据网格 / 图表（折线、柱状、面积）的样式与交互实现或改造，尤其是列宽跳动、滚动抖动、粘性表头错位、大列表卡顿、图表加载后页面跳动、高分屏模糊、Y 轴误导；也覆盖页面级数据区的四种状态（未查询 / 加载中 / 无结果 / 失败）分不清或没播报给辅助技术、栅格被表格或长日志撑破，以及"表格或图表不好看、不简洁"这类要求。
+description: Use when building or restyling a frontend data table OR chart — column widths, alignment, row density, sticky headers, hover/selection/focus states, virtual scrolling, theme tokens, line/bar/area charts, axis ranges and baselines, chart sizing, DPR-correct canvas — or when a page-level data region's four states (not-yet-queried / loading / empty / failed) are conflated or not announced to assistive tech, or a grid or flex child is being burst open by wide contents such as a table, or a page's own views need shareable URLs and a working back button (routing — what belongs in the URL, popstate, and the file:// path-change limit), or form controls have no visible hover / focus / disabled / invalid states — or when diagnosing table jitter, drifting columns, scroll jump-back, layout shift after a chart loads, blurry charts, or misleading axes. 触发场景：前端表格 / 数据网格 / 图表（折线、柱状、面积）的样式与交互实现或改造，尤其是列宽跳动、滚动抖动、粘性表头错位、大列表卡顿、图表加载后页面跳动、高分屏模糊、Y 轴误导；也覆盖页面级数据区的四种状态（未查询 / 加载中 / 无结果 / 失败）分不清或没播报给辅助技术、栅格被表格或长日志撑破、**页面自己的多个视图需要可分享的 URL 与能用的后退**（状态挂 query 还是 hash、`popstate`、以及 `file://` 下改路径的报错）、**表单控件的 hover / focus / disabled / invalid 状态看不出来**，以及"表格或图表不好看、不简洁"这类要求。
 ---
 
 # 前端表格与图表：好看、简洁、稳定、快
@@ -28,17 +28,18 @@ description: Use when building or restyling a frontend data table OR chart — c
 
 ## 施工路径：接到任务后按这个顺序走
 
-下面十四节是**知识**；这一节是**做法**。不要从 §1 开始读着写，按这个顺序做。
+下面十六节是**知识**；这一节是**做法**。不要从 §1 开始读着写，按这个顺序做。
 
-### 第 1 步 · 先问三个问题，别急着写代码
+### 第 1 步 · 先问四个问题，别急着写代码
 
 | 问 | 答案决定 |
 |---|---|
 | **一次最多渲染多少行 / 多少点？** | §0 的整体方案（普通渲染 / 虚拟滚动 / 服务端） |
 | **要回答什么问题？** 精确值 / 趋势 / 比较 / 构成 / 分布 / 相关性 | §3 选表格还是图表、选哪种图 |
 | **数据从哪来，可能有多脏？** | §9 的防御强度；是否要报告被忽略的记录 |
+| **是单页还是多视图？这条 URL 要不要能发给别人？** | §15 —— 要不要把状态挂到 URL 上、能不能用改路径做路由 |
 
-这三个问题**任何一个答不上来，就先问用户**，不要替他假设。假设错了，后面全白做。
+这四个问题**任何一个答不上来，就先问用户**，不要替他假设。假设错了，后面全白做。
 
 ### 第 2 步 · 选型（§3 §4 §10）
 
@@ -50,6 +51,8 @@ description: Use when building or restyling a frontend data table OR chart — c
 **先不管样式。** 顺序是：数据结构 → 计算（比例尺、刻度、堆叠、分箱）→ 渲染。
 
 - **把计算写成纯函数**：数字进、数字出，不碰 DOM。这样它可测，也就能真的被测。
+- **状态挂在哪，这时候就定**（§15）—— 要能被 URL 分享的（当前视图、筛选条件），
+  从一开始就写进 URL，别等做完了再往回接。
 - **容器高度先固定**（§5），**容器宽度也要显式**（§13）：栅格与弹性子项默认带自动最小尺寸，
   宽表格会把它撑破，而撑破往往在窄窗口或换了数据之后才出现。
 - 骨架见下面的「最小骨架」。
@@ -69,14 +72,15 @@ description: Use when building or restyling a frontend data table OR chart — c
 **顺序不能反**：先让**悬停给出完整读数**，再决定要不要点击钉住、刷选、联动。
 判据是"什么都不点，能不能读到任意一点的**全部字段**"。
 
-### 第 6 步 · 最后做视觉（§11）
+### 第 6 步 · 最后做视觉（§11 §16）
 
-排版层次 → 留白与对齐 → 配色主次 → 细节完成度。
+排版层次 → 留白与对齐 → 配色主次 → **控件状态**（§16：默认 / hover / focus / disabled / invalid，
+一个都不能少）→ 细节完成度。
 **放到最后**是因为前三步会改动尺寸和对齐；先做视觉等于白做两遍。
 
 ### 第 7 步 · 自检（§12）
 
-逐条过。**三个必做**：真机滚动、喂脏数据、按最终显示尺寸看。
+逐条过。**四个必做**：先让它跑起来、真机滚动、喂脏数据、按最终显示尺寸看。
 
 ### 第 8 步 · 交付时说清楚
 
@@ -985,6 +989,84 @@ grid 子项的 **automatic minimum size** 取 **content-based minimum size**，
   读不出来或解析失败就当没有，别让坏草稿把表单打坏。
 - **提交中禁用提交按钮并改文案**（"查询中…"），挡住连点引发的重复查询。
   这不违反 3.2.2（它不是上下文变化），**但禁用必须给出理由** —— 按钮不能莫名变灰。
+
+## 15. 页面级路由：**状态挂在 URL 上**
+
+前面几节都在讲"一块区域"。这一节讲**页面之间**，而它只有一个硬判据：
+
+> **把当前这条 URL 发给别人，他打开看到的是同一屏吗？**
+
+### 先记住一条平台边界（② 平台常量 · 本机实测）
+
+> 在 `file://` 下，`history.pushState` **只改 query 或 hash 是安全的；改路径会抛 `SecurityError`。**
+
+| `pushState` 的目标 | `file://` | `http://` |
+|---|---|---|
+| 只改 query（`?a=1`） | ✅ | ✅ |
+| 只改 hash（`#a=1`） | ✅ | ✅ |
+| 改**路径**（`other.html` / `sub/x.html` / `/C:/x.html`） | ❌ **SecurityError** | ✅ |
+
+**判据**：**这个页面要不要能双击打开？** 要（单文件示例、离线页面、发给别人直接看的 demo），
+**就别用 History API 改路径做路由** —— 状态只能挂在 query 或 hash 上。
+
+⚠️ **适用范围**：只在本机 **Edge（Chromium）** 上实测过，**Firefox / Safari 未验** ——
+而 `file://` 的权限模型恰好是各浏览器历史上分歧最大的地方之一。
+**它是常量，但常量也有作用域。**
+
+### 哪写状态要进 URL
+
+**当前视图 + 全部筛选条件。** 一条都不能少。
+
+**反例**：筛选只放在内存里 → URL 分享出去是一张空白页，对方以为"没数据"。
+（这和 §14 那条"『还没查』不是『没有数据』"是同一个坑的两种表现：**都是把一种状态伪装成另一种**。）
+
+### 后退必须能用
+
+**监听 `popstate`**（有 hash 兜底时还要监听 `hashchange`）。
+
+**判据**：**按浏览器后退，内容跟着变了吗？** —— 不是只变 URL。
+
+**反例**：只 `pushState` 不监听 → 后退时地址栏变了、页面没变。
+用户以为自己按坏了，**再按一次就离开了这个页面**。
+
+### 数值类决策：写"保持一致"，不写具体像素
+
+高度、圆角、内边距这些，**同一页里同一个角色只用一个值**。
+
+**判据**：把页面上同类控件的尺寸列一遍，是不是只有一个值。
+
+**反例（实测）**：同一个任务、两次无上下文的独立构建 ——
+一个把控件圆角做成 **7px**、另一个做成 **6px**；一个控件高 **36px**、另一个 **34px**。
+**两个值都对。** 但如果把两次的做法混进同一个页面，就是错的。
+
+**所以这类"都对、但必须统一"的东西，写成具体像素是在骗自己**，
+写成"**保持一致**"才是可执行的。
+
+> **来源（D 级 · 实践证据）**：这一节除上面那条实测的平台边界外，其余规则来自**同一个任务、
+> 两次互不知情的独立构建**都这么做；而**具体数值两次全部分歧** —— 那正是"数值要写保持一致"
+> 这条规则自己的反例。
+
+## 16. 表单控件：**五个状态一个都不能少**
+
+这一节补的是**外观**。它的**语义**那半在 §14（`aria-invalid` / `aria-describedby` / 焦点回送），
+而 §14 已经定了一条约束：**错误要用文本说清，不是只把边框变红。**
+
+**判据**：**逐个状态过一遍 —— 默认 / hover / focus / disabled / invalid，每个都有看得见的差别吗？**
+
+| 状态 | 做法 | 反例（不合格的样子） |
+|---|---|---|
+| 默认 | 边框走语义 token，不写死颜色 | 每个控件各自一个色值 |
+| **hover** | **改边框色**，不改背景填色 | 整块换底色 → 与"选中"状态混淆 |
+| **focus** | 用 **`:focus-visible`**，给约 **2px** 的外环 | 用 `:focus`：鼠标点一下也画环；不给环：**键盘用户完全失去位置** |
+| **disabled** | 是**独立状态**，且**必须给出理由**（§14） | 按钮莫名变灰，用户反复点 |
+| **invalid** | 见 §14：**文本为主，边框变色只是辅助** | 只把边框变红 |
+
+**判据（挑得出主次吗）**：**主按钮填充强调色、次要按钮描边** ——
+一眼能看出哪个是主操作。两个按钮一样重，用户得读文字才知道点哪个。
+
+> **来源（D 级 · 实践证据）**：同一个任务、两次互不知情的独立构建，**这五条都这么做**
+> （边框色 token · `:focus-visible` 外环 · hover 改边框 · 主填充/次描边 · disabled 独立）。
+> 它们分歧的是**数值**（高 34 vs 36、圆角 6 vs 7）—— 那部分按 §15 末尾那条处理。
 
 ## 参考实现（按需加载，是起点不是成品）
 

@@ -69,6 +69,23 @@ for (const name of skills) {
 
   const skill = readFileSync(join(dir, 'SKILL.md'), 'utf8')
 
+  /* ---- 0. front-matter 必须能解析：一个 ASCII 冒号能让整个技能消失 ---- */
+  // 2026-09-14 实测：描述里写了 `(routing: what belongs in the URL, …)` ——
+  // **一个 ASCII 冒号加空格**。YAML 的裸标量里 `: ` 会终止标量，front-matter 解析失败，
+  // 于是**这个技能从模型可见的目录里凭空消失了**：没有报错、没有警告，它只是不存在了。
+  // 这是本工程里第一次"一次改动让整个技能消失"，所以必须机检。
+  const fm = skill.match(/^---\r?\n([\s\S]*?)\r?\n---/)
+  if (!fm) fail('SKILL.md 开头没有 `---` 包起来的 front-matter')
+  else {
+    const descLine = (fm[1].match(/^description:\s*(.*)$/m) || [])[1]
+    if (!descLine) fail('front-matter 里没有 description')
+    else if (/:\s/.test(descLine)) {
+      const at = descLine.search(/:\s/)
+      fail(`description 里有**裸的 ": "** —— YAML 会在这里截断标量，技能会从目录里消失。`
+        + `用 "—" 或全角"："代替。片段: …${descLine.slice(Math.max(0, at - 28), at + 28)}…`)
+    } else ok('front-matter 能解析（description 里没有裸的 ": "）')
+  }
+
   /* ---- 1. 正文里引用的 references/ 文件都真实存在 ---- */
   const cited = new Set()
   for (const m of stripNoise(skill).matchAll(/references\/([A-Za-z0-9_.-]+)/g)) cited.add(m[1])
@@ -176,6 +193,8 @@ for (const name of skills) {
     ['高分屏模糊', /模糊/],
     ['误导性坐标轴', /误导/],
     ['迷你图 sparkline', /sparkline|迷你图/i],
+    ['路由 / URL 状态', /routing|popstate|可分享的 URL/i],
+    ['表单控件状态', /form controls|表单控件/i],
   ]
   const descLine = (skill.match(/^description:.*$/m) || [''])[0]
   const bodyText = skill.replace(/^description:.*$/m, '')
