@@ -301,11 +301,19 @@
       line(r1, '判定            :',
         same(before1, after) ? '列宽一字未变' : '列宽已漂移（差值 ' + fmt(after.map(function (w, i) { return w - before1[i]; })) + '）',
         same(before1, after) ? 'ok' : 'bad');
+      // 说明这一行**必须由测量决定**，不能只看开关。
+      // ⚠️ 原先写的是 `auto-layout ? '漂移是预期结果' : …` —— 于是页面会在
+      //    "判定：列宽一字未变" 的正下方打印"漂移是预期结果"。
+      //    **一句不会失败的断言，压在自己的反证上面。**（2026-09-14 修）
+      var drifted = !same(before1, after);
+      var isCtrl = document.body.classList.contains('auto-layout');
       line(r1, '说明            :',
-        document.body.classList.contains('auto-layout')
-          ? '对照组 auto layout —— 漂移是预期结果'
-          : (same(before1, after) ? 'fixed layout 生效' : '异常：fixed 下不该漂移'),
-        same(before1, after) ? 'ok' : 'warn');
+        isCtrl
+          ? (drifted
+              ? '对照组 auto layout —— 漂移已复现'
+              : '对照组开着，但这一屏没测到漂移：多滚几屏，或把行内容做得更长、更不齐')
+          : (drifted ? '异常：fixed 下不该漂移' : 'fixed layout 生效'),
+        isCtrl ? (drifted ? 'warn' : 'warn') : (drifted ? 'bad' : 'ok'));
     }, 120);
   }, { passive: true });
 
@@ -328,10 +336,19 @@
     line(r2, '判定            :',
       (numMax - numMin) < 0.5 ? '数字变化时列宽稳定' : '列宽随数字跳动（振幅 ' + (numMax - numMin).toFixed(1) + 'px）',
       (numMax - numMin) < 0.5 ? 'ok' : 'bad');
+    // 同 ①：说明必须由测量决定。而且这里要说清**两个对照组会互相干扰** ——
+    // table-layout: fixed 下列宽来自 <colgroup>，数字再宽也撼动不了它，
+    // 所以只开「关掉 tabular-nums」是测不出跳动的，得先开 ① 的对照组。
+    var jitter = (numMax - numMin) >= 0.5;
+    var ctrl2 = document.body.classList.contains('no-tabular');
     line(r2, '说明            :',
-      document.body.classList.contains('no-tabular')
-        ? '对照组 normal —— 跳动是预期结果'
-        : 'tabular-nums 生效');
+      ctrl2
+        ? (jitter
+            ? '对照组 normal —— 跳动已复现'
+            : '对照组开着，但列宽没跳动 —— 因为 table-layout 还是 fixed，列宽由 <colgroup> 定，' +
+              '数字宽度根本影响不到它。**先开 ① 的对照组，再回来看这一条。**')
+        : (jitter ? '异常：tabular-nums 开着还跳' : 'tabular-nums 生效'),
+      ctrl2 ? 'warn' : (jitter ? 'bad' : 'ok'));
   }, 900);
 
   // ---------------------------------------------------------------- ③ 塌陷
@@ -406,8 +423,14 @@
     numMax = 0; numMin = 1e9; numBefore = null;
   });
   document.getElementById('t-reset').addEventListener('click', function () {
+    // ⚠️ 重置必须连**开关**一起复位。原先只清读数、重置计数器，
+    //    于是页面仍停在 auto-layout / no-tabular 状态，而按钮上的 aria-pressed 还是 true ——
+    //    用户以为回到了基线，其实没有。（2026-09-14 修）
+    document.body.classList.remove('auto-layout', 'no-tabular');
+    document.getElementById('t-auto').setAttribute('aria-pressed', 'false');
+    document.getElementById('t-tabular').setAttribute('aria-pressed', 'false');
     s1.scrollTop = 0; before1 = widths(s1); t1.render();
-    r1.textContent = ''; r3.textContent = '';
+    r1.textContent = ''; r2.textContent = ''; r3.textContent = '';
     numMax = 0; numMin = 1e9; numBefore = null;
     report3(baseline(), 'baseline');
   });
