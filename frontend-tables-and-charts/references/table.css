@@ -166,6 +166,12 @@ table.data-table {
 
 :root {
   --table-border: color-mix(in srgb, currentColor 12%, transparent);
+  /* 表格的静息底色。**冻结列必须用它** —— sticky 单元格自己画背景，
+   * 用透明色会让滚过去的单元格透出来，用一个**和宿主不一致**的颜色又会在
+   * 深色页面里变成一块浅色。所以它必须是一个**声明在深浅两套里的 token**，
+   * 不能靠 `Canvas` 之类的系统色兜底。（2026-09-14：原先只写 `var(--table-bg, Canvas)`
+   * 而两套 token 里都没有 `--table-bg` —— 一次独立验证指出这在深色下会露出浅色块。） */
+  --table-bg: #ffffff;
   --table-header-bg: #ffffff;
   --table-header-fg: #55596b;
   --table-row-hover: #f5f6f8;
@@ -175,6 +181,7 @@ table.data-table {
 
 @media (prefers-color-scheme: dark) {
   :root {
+    --table-bg: #131417;
     --table-header-bg: #17181c;
     --table-header-fg: #9aa0b0;
     --table-row-hover: #1f2126;
