@@ -179,7 +179,10 @@
 
       var vs = rowsIn.map(function (r) { return r.v; });          // 脏值照样参与
       var mn = Math.min.apply(null, vs), mx = Math.max.apply(null, vs);
-      var pad = (mx - mn) * 0.18 || 1;
+      // ⚠️ 这里**不能**写 `|| 1` —— 那正好等于加固版的退化域兜底（lo-1 / hi+1），
+      //    会让"全同值""单点"这两个用例演示不出 §9 表里声称的除零。
+      //    （2026-09-14 修：原先带着 `|| 1`，于是朴素版在这两例上"侥幸无问题"。）
+      var pad = (mx - mn) * 0.18;
       var lo = mn - pad, hi = mx + pad;
       d.domain = [lo, hi];
 
@@ -309,6 +312,11 @@
       problems.push('域无效 [' + nd.domain.map(String).join(', ') + ']');
     if (hd.domain && (broken(hd.domain[0]) || broken(hd.domain[1])))
       fixes.push('加固版域无效');
+
+    // 域**退化成一点**：上下界相等时 `(v-lo)/(hi-lo)` 除以 0 → y 坐标全成 NaN。
+    // 只查"域是不是 NaN"会漏掉这一种 —— 它是有限值，却是坏的。（2026-09-14 补）
+    if (nd.domain && !broken(nd.domain[0]) && nd.domain[0] === nd.domain[1])
+      problems.push('域退化成一点 [' + nd.domain[0] + ']，y 坐标全成 NaN');
 
     // 时间顺序：不排序就按原始顺序连线
     if (c.id === 'unsorted') {
