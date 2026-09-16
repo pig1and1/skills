@@ -1,7 +1,7 @@
 // Canvas line chart skeleton: DPR-correct, space-reserving, resize-throttled.
 // No dependencies.
 //
-// It exists to demonstrate three rules from `frontend-tables-and-charts`:
+// It exists to demonstrate four rules from `frontend-tables-and-charts`:
 //
 //   1. The container's height is fixed BEFORE data arrives, so loading cannot
 //      shift the page. Layout shift is measurable -- aim for ~0 CLS.
@@ -9,6 +9,11 @@
 //      otherwise it is blurry on every display with DPR > 1.
 //   3. Resize is observed and throttled to one redraw per frame -- never a
 //      rebuild per event.
+//   4. BOTH axes get labels. The x-axis is the one most often left off,
+//      because "it's obviously time" -- see the skill's section 6.
+//      This skeleton reserved PAD_BOTTOM from the start but drew nothing in
+//      it until 2026-09-14, while section 6 called the missing x-axis the
+//      most commonly dropped rule. The body and the skeleton disagreed.
 //
 // AXIS POLICY. This draws a line chart, so the y-domain is FITTED TO THE DATA:
 // a line communicates position and trend, not magnitude, and forcing zero would
@@ -28,6 +33,12 @@ export interface LineChartOptions {
   domain?: [number, number]
   /** Formats a value for the y-axis labels. */
   format?: (v: number) => string
+  /**
+   * One label per data point, drawn at 4-6 evenly spaced positions along the
+   * x-axis (skill section 6). Omit it and the x-axis is simply not drawn --
+   * which is exactly the omission section 6 warns about, so pass it.
+   */
+  xLabels?: string[]
 }
 
 /** Left gutter reserved for axis labels. Fixed so the plot area never reflows. */
@@ -52,7 +63,13 @@ export function createLineChart(container: HTMLElement, options: LineChartOption
   canvas.setAttribute('role', 'img')
   container.appendChild(canvas)
 
-  const ctx = canvas.getContext('2d')
+  const context = canvas.getContext('2d')
+  // Fail loudly instead of drawing nothing. `getContext` is nullable, and
+  // TypeScript will not carry a narrowing of it into the nested draw()
+  // closure, so bind a non-null alias once and use that everywhere below
+  // (otherwise the whole file is 25 x TS18047 under --strict).
+  if (!context) throw new Error('line chart: 2d context unavailable')
+  const ctx: CanvasRenderingContext2D = context
   let series: Series[] = []
   let frame = 0
 
@@ -119,6 +136,34 @@ export function createLineChart(container: HTMLElement, options: LineChartOption
       ctx.lineTo(cssW, py)
       ctx.stroke()
       ctx.fillText(format(v), AXIS_W - 8, py)
+    }
+
+    // X axis (section 6): 4-6 ticks, plus a baseline for them to sit on.
+    // NOTE the ticks are evenly spaced by INDEX, not by time. If your points
+    // are not evenly spaced in time, index spacing lies about time -- section 6
+    // means TIME-equal when it says 等距. Resample first, or pass real
+    // timestamps and place the ticks by value instead.
+    const labels = options.xLabels
+    if (labels && labels.length === n) {
+      const axisY = Math.round(PAD_TOP + plotH) + 0.5
+      ctx.strokeStyle = gridColor
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.moveTo(AXIS_W, axisY)
+      ctx.lineTo(cssW, axisY)
+      ctx.stroke()
+
+      const want = cssW < 420 ? 4 : cssW < 700 ? 5 : 6
+      const ticks = Math.min(want, n)
+      ctx.fillStyle = labelColor
+      ctx.textBaseline = 'top'
+      for (let t = 0; t < ticks; t++) {
+        const i = ticks === 1 ? 0 : Math.round((t * (n - 1)) / (ticks - 1))
+        // Pin the outermost labels inside the canvas; centring them on the
+        // edge would clip half the text.
+        ctx.textAlign = i === 0 ? 'left' : i === n - 1 ? 'right' : 'center'
+        ctx.fillText(labels[i], x(i), axisY + 6)
+      }
     }
 
     for (const s of series) {

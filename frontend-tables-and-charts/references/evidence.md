@@ -86,6 +86,29 @@ app-interface** 五个系统归纳。§2 尺寸表的**起点**来自它。
 （2252★ · MIT · TypeScript）：shadcn/ui + TanStack Table。看它的 issue/PR 记录比读代码更快，
 例如 [`Refactor/shadcn neutral oklch theme`](https://github.com/openstatusHQ/data-table-filters/issues/102)。
 
+**B 级 · 一手规范** —— 表格无障碍契约的出处**不是一个地方，是三个**。
+（正文原先把这六条一概写成"来自 WAI-ARIA APG 的标准原文"，**那是错的**；
+2026-09-14 逐条核对原文后改正。）
+
+| 断言 | 出处 | 原文（截取） |
+|---|---|---|
+| `<caption>` 关联表名 | [WCAG 技术 **H39**](https://www.w3.org/WAI/WCAG21/Techniques/html/H39) | *Technique H39: Using `caption` elements to associate data table captions with data tables* … relates to **1.3.1 Info and Relationships (Sufficient)**。⚠️ 该页自己写着：*Techniques are examples of ways to meet WCAG. They are **not required** to meet WCAG.* |
+| `scope` 关联表头与数据格 | [WCAG 技术 **H63**](https://www.w3.org/WAI/WCAG21/Techniques/html/H63) · [HTML 规范 `scope`](https://html.spec.whatwg.org/multipage/tables.html#attr-th-scope) | *The `scope` attribute may be used to clarify the scope of any cell used as a header.* ⚠️ 同页 Note：*For simple tables that have the headers in the first row or column, **it is sufficient to simply use the `th` elements without `scope`**.* |
+| `aria-sort` 指示排序 | [APG **Table Pattern**](https://www.w3.org/WAI/ARIA/apg/patterns/table/) | *If the table contains sortable columns or rows, **aria-sort** is set to an appropriate value on the header cell element for the sorted column or row* |
+| 静态表用 `table`、可交互才用 `grid` | [APG **Table Pattern**](https://www.w3.org/WAI/ARIA/apg/patterns/table/) | *it is **not an interactive widget**. Thus, its cells are **not focusable or selectable**. The **grid pattern** is used to make an interactive widget that has a tabular structure.* |
+| 行选中写 `aria-selected` | [APG **Grid Pattern**](https://www.w3.org/WAI/ARIA/apg/patterns/grid/) | *If the grid supports selection, when a cell or row is selected, the selected element has **aria-selected** set `true`.* ⚠️ **只在 grid 里成立** —— Table Pattern 明说表格单元格 not selectable |
+| grid 的键盘契约 | [APG **Grid Pattern**](https://www.w3.org/WAI/ARIA/apg/patterns/grid/) | *Right / Left / Down / Up Arrow: Moves focus one cell …* · *Home: moves focus to the first cell in the row that contains focus* · *Enter: Disables grid navigation and … places focus in an input field / on the first widget* · *Only one of the focusable elements contained by the grid is included in the page tab sequence* |
+
+> **两个从这次核对里掉出来的结论：**
+>
+> 1. **"techniques are not required"** —— WCAG 的技术文档是**够用的做法**，
+>    不是硬性要求。把 H39 / H63 写成"要求"，**比没有出处更糟**：
+>    它让人以为不这么做就是不合规，而规范自己没这么说。
+> 2. **`aria-selected` 与 `role="table"` 不能并存。** 正文原先同时写着
+>    "选中行要写 `aria-selected`"和"只有单元格可交互才用 `role='grid'`" ——
+>    **这两句互相否定**：行可选中就是可交互。能选中的表就是 grid。
+>    （这一条是把独立验证的产物与规范原文对读才发现的。）
+
 ---
 
 ## 图表
@@ -221,6 +244,11 @@ app-interface** 五个系统归纳。§2 尺寸表的**起点**来自它。
 
 写它、以及用它做示例的过程中，发现的都是**验证方法本身**的问题，值得单列：
 
+> ⚠️ **下面全是历史记录，不是现状。** 每条记的是**当时**的样子，其中多数已经修好
+> （修好的会在行内注明）。**判断现状请看正文**（`SKILL.md`），不要拿这一节的描述
+> 当依据 —— 有一份独立验证的产物就因此在报告里提出了一条"正文与 evidence 冲突"，
+> 而它实际只是历史记录没说清自己的时态。
+
 | 现象 | 教训 |
 |---|---|
 | 检查脚本用 `querySelectorAll('table')[1]` 拿到了错误的元素 | 索引选择器在结构变化时**静默出错**，不会报错 |
@@ -239,7 +267,7 @@ app-interface** 五个系统归纳。§2 尺寸表的**起点**来自它。
 | `min-width` 探针第一版用了 60 字符（约 432px），而 `1fr` 分到 438px —— **内容没宽过容器**，`min-width: auto` 根本没机会生效，四种情形测出来一模一样 | **"测了但没测到触发条件"和"没测"一样危险**：它给你一个"已验证"的错觉。**做反例时先确认反例真的会失败** —— 后来把内容加宽到约 120 字符，对照组当场差出 408px |
 | §14 的检查器**在出厂摆放里根本跑不起来**：`load()` 的 URL 硬编码成 `/index.html`，而 `QC_PAGE` 只决定 patch 哪个文件 —— 于是它 patch `query-console.html` 却去加载 `index.html` | **我"验证通过"的那次，是在临时目录里把页面改名成 `index.html` 之后跑的。**换句话说，**验证用的配置不是会被交付的那个配置**，而这个差异恰好把缺陷盖住了。改成用同一个 `PAGE` 拼 URL 之后，才第一次在真实出厂摆放（目录里只有 `query-console.html`）里跑通。**验证必须在交付的那个配置里做；"为了跑通先改一下环境"是最贵的省事。** |
 | **两个互不相干的人，写出了同一类不可能失败的竞态断言。** 我这边：用 `#go.click()` 发第二次提交，而提交中该按钮是 `disabled`，`click()` 是空操作。子代理那边：快慢顺序写反 + 判据窗口只有 260ms | **这不是巧合，是这类断言的结构性陷阱**：竞态测试的"通过"和"什么都没发生"长得一模一样。**两边都是靠变异测试才发现的。** 所以竞态断言必须先回答一句：**"如果那个保护被拿掉，我会看到什么不同？"** 答不上来，它就没在测竞态。 |
-| **施工路径从来没提到 §2 §7 §13 §14** —— 它们只能靠通读全文找到。§13/§14 是后加的，加的那一轮没有回头看路径 | **导航可达性是可验证的属性**：照着"第 1 步 → 第 8 步"走完，如果某一节**始终没被要求读过**，那一节等于不存在 —— 写得再对也不会被用上。已固化为检查器的第 7 项；拿上一个提交回放，它当场报出这四节。**新增一节，必须同时把它挂到某一步上。** |
+| **施工路径曾经没提到 §2 §7 §13 §14**（**已修**，见右）—— 那时它们只能靠通读全文找到。§13/§14 是后加的，加的那一轮没有回头看路径 | **导航可达性是可验证的属性**：照着"第 1 步 → 第 8 步"走完，如果某一节**始终没被要求读过**，那一节等于不存在 —— 写得再对也不会被用上。已固化为检查器的第 7 项；拿上一个提交回放，它当场报出这四节。**新增一节，必须同时把它挂到某一步上。** |
 | 同一次检查里我先说不可达的是 **§0** §2 §7 §13 §14，后来才去逐个核对 —— 而 §0 **一直都在第 1 步的问题表里** | **不要从抽样推广**：我只量了 §13/§14，却把结论说成了 5 节。基于这个错数，我还在第 2 步加了一句与第 1 步重复的话，事后已撤。**先量全再下结论；说"我检查过了"时必须说得清检查的边界。** |
 | 检查器把 `meta/environment.md` §12 判成"悬空的内部节号"（文件名被反引号包着，正则只允许中间是空白） | **检查器报 FAIL 时，第一个假设应该是"检查器错了"**，然后手工去核实那个所谓的缺陷（这里 `environment.md` 的 §12 确实存在，引用是对的）。这是同一个检查器的第 4 次误报，四次同一个毛病：**靠字面匹配去认语义**。跨文件引用现在被列为"未校验"，而不是静默放过或假报失败。 |
 | **§13 引用「§9 的长标签截断 + `title`」，而 §9 里根本没有这条规则** —— 它只是「类别爆炸」那一行表格里的一句半话（讲的是图表类别标签），真正的写法（`overflow` / `nowrap` / `ellipsis`）**散在四个参考实现里**，正文从没把它立成规则 | **检查器只验"§9 存在"，不验"§9 真讲了这件事"** —— 交叉引用可以全部解析成功、却指向一段不存在的内容。这是继"冻结首列"之后**第二次**发现"规则只活在范本里"。**"引用能解析"和"引用有内容"是两件事。** |
@@ -249,6 +277,7 @@ app-interface** 五个系统归纳。§2 尺寸表的**起点**来自它。
 | §1 的"冻结首列"规则曾附着一句"`VirtualTable.tsx`、`dashboard.html`、`verify.html` 三个都固定了左列"，并把它当作"行为活在范本里"的先例引用到了 §13。**实测：15 个参考实现没有一个固定了左列** —— 那些 `left: 0` 全是绝对定位（虚拟行容器 / Y 轴标签），所有 `sticky` 都是 `top: 0`；`git log -S 'left: 0'` 显示历史上从没出现过 `sticky; left`。那句话是我凭印象写的，**连那次提交的标题（"a rule the reference implementations already followed in silence"）都跟着错了** | **"我记得范本里有"和"我看过范本"是两件事。** 核实本地文件只要一次 grep，我跳过了它，于是这个假声称**传播进两个小节加一条提交信息**。⚠️ 关键区别：**规则本身的 D 级依据（5 条独立公开记录）是真的，错的是"我们自己的范本也这么做"这个附加声称** —— 别把自我一致性当成证据。已补上 `table.css` 的 `.col-id`，并在 §1 写了订正。 |
 | 冻结列检查里 z-index 那两条报**假失败**（`1 < 3 < 3`）—— 我用 `querySelector('thead th')` 去取"普通表头格"，而第一个 `th` 就是冻结列自己 | 又一次**选择器取错了元素**。但这次**当场就发现了，因为断言把量到的数值一起打了出来** —— `1 < 3 < 3` 这个次序本身不可能成立，数字自己露了馅。**只报"通过/失败"的断言没法被怀疑；把数值打出来，错误才会自己冒头。** |
 | §13 那张"反例"表把**应得值**写错了：写成 438px / 526px，真实可用是 **432px / 518px** —— 公式用了 `行宽 / 2` 和 `行宽 × 3/5`，**漏掉 `gap: 12px` 的那一份**。探针里同一个公式也错着 | **判据自己算错时它不会报错，只会安静地给出一个看起来合理的"应得值"** —— 然后把**正确的实现**报成"差了 6px"。是 `min-width-check.mjs` 跑起来、三种修法精确落在 432px 才露出来的。**"应得值"和"被测值"一样需要证据**；量别人的东西之前，先量一下自己的尺子。 |
+| **`LineChart.ts` 只画 Y 轴，而 §6 偏偏把"最容易漏的是 X 轴"单独点出来** —— 骨架里 `PAD_BOTTOM = 20` 一直留着底部空间却什么都不画，是"打算画、后来漏了"的痕迹 | **范本与正文冲突，而 AI 信范本** —— 正是本 skill 自己警告过的形状。**是一次独立验证的产物照正文做了 X 轴、并主动报告了这个冲突，才把它挖出来。** 已补上 X 轴（4–6 刻度 + 基线 + 两端标签防裁切），并让骨架在 `--strict` 下编译到**零错误**（原先 25 处 `ctx possibly null`，`getContext` 的可空性没能窄化进嵌套闭包）。 |
 
 **B 级 · 一手规范** —— §13 的机制出自 W3C CSS 工作组的源仓库
 [`w3c/csswg-drafts`](https://github.com/w3c/csswg-drafts)（原文，非转述）：

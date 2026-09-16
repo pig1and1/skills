@@ -59,7 +59,7 @@ description: Use when building or restyling a frontend data table OR chart — c
 按这个优先级，因为它们造成的损害依次递减：
 
 1. **不误导**（§6 §14）—— 柱状/面积从 0；折线可以自适应；不搞双轴、3D、超 5 类饼图。
-   页面级数据区要能分清"**还没查 / 没数据 / 加载失败**"（§14），三者混为一谈就是误导。
+   页面级数据区要能分清"**还没查 / 加载中 / 没数据 / 加载失败**"（§14）—— **四种**，少一种就是误导。
 2. **不抖**（§1 §2 §5）—— 列宽显式（§1）、行高固定（§2）、容器预留空间、网格淡而稳。
 3. **不崩**（§7 §9）—— 脏值剔除并计数、时间排序、**缺口断开**、退化域不除零、超量降采样；
    点数超 2k 换 Canvas，别在滚动回调里重绘（§7）。
@@ -312,22 +312,26 @@ headless 方案（TanStack Table，包体积约 9KB）适合 ≤10k 行
 
 ### 无障碍契约（几条硬性的）
 
-表格最容易在这里失分，因为它看起来"只是个表格"。下面五条**来自 WAI-ARIA APG 的标准原文**
-（不是任何系统的转述），**最后一条是产品惯例**（WCAG 要求键盘可达，但具体做法没有被规范写死）。
-**前五条是要求，最后一条是惯例，分量不同**：
+表格最容易在这里失分，因为它看起来"只是个表格"。下面六条**来自三个不同的地方**，
+不是同一份文档 —— **把它们一概归给 APG 是这个 skill 犯过的错**（见 `evidence.md`）。
+**最后一条是产品惯例**（WCAG 要求键盘可达，但"给滚动容器加 `tabindex="0"`"是实现方式，
+不是规范原文）：
 
-| 要求 | 为什么 | 性质 |
+| 要求 | 为什么 | 出处 |
 |---|---|---|
-| `<table>` 必须有 **`<caption>`** 或 `aria-label` | 屏幕阅读器靠它播报"这是什么表" | **要求**（APG） |
-| 每个 `<th>` 都要 **`scope="col"`** | 缺了它 AT 无法按列导航 —— **最常被漏掉的一条** | **要求**（HTML / APG） |
-| 可排序列要有 **`aria-sort="ascending\|descending\|none"`** | 只画一个箭头图标，辅助技术完全感知不到 | **要求**（APG） |
-| 选中行要在 `<tr>` 上写 **`aria-selected="true"`** | 只用 CSS class 表示选中，AT 看不见 | **要求**（APG） |
-| 静态表格用 `role="table"`；**只有单元格可交互**才用 `role="grid"` | `grid` 会启用单元格级方向键导航，给只读表格加它反而添乱 | **要求**（APG） |
-| 横向滚动容器要有 **`tabindex="0"`** | 否则键盘用户根本无法横向滚这张表 | **惯例** —— WCAG 要求键盘可达，但"给滚动容器加 `tabindex="0"`"是实现方式，不是规范原文 |
+| `<table>` 要有 **`<caption>`**（或 `aria-label`） | 屏幕阅读器靠它播报"这是什么表" | **WCAG 技术 H39**。⚠️ H39 自己声明 techniques **are not required** —— 它是"够用的一条路"，不是硬性要求 |
+| `<th>` 建议写 **`scope="col"`** / `scope="row"` | 复杂表格里 AT 靠它判断表头归属 | **HTML 规范**（WCAG 技术 H63 同）。⚠️ **H63 明说：表头就在第一行 / 第一列的简单表格，只用 `<th>` 就够，不必加 `scope`** —— 所以它**不是**"每个 `<th>` 都必须" |
+| 可排序列要有 **`aria-sort="ascending\|descending\|none"`** | 只画一个箭头图标，辅助技术完全感知不到 | **APG Table Pattern**（原句：*If the table contains sortable columns or rows, aria-sort is set to an appropriate value on the header cell element*）。取值还有 `other` |
+| 静态表格用 `role="table"`；**只有单元格可交互**才用 `role="grid"` | `grid` 会启用单元格级方向键导航，给只读表格加它反而添乱 | **APG Table Pattern**（原句：*it is not an interactive widget. Thus, its cells are not focusable or selectable. The grid pattern is used to make an interactive widget that has a tabular structure.*） |
+| **行可选中**时，选中的 `<tr>` 写 **`aria-selected="true"`** | 只用 CSS class 表示选中，AT 看不见 | **APG Grid Pattern**（原句：*If the grid supports selection, when a cell or row is selected, the selected element has aria-selected set true*）。⚠️ **这一条只在 grid 里成立** —— Table Pattern 明说表格的单元格 *not focusable or selectable*。**所以"行可选中"与"用 `role="table"`"不能同时成立：能选中的表就是 grid。** |
+| 横向滚动容器要有 **`tabindex="0"`** | 否则键盘用户根本无法横向滚这张表 | **惯例** —— 见上 |
 
-**键盘契约**（`role="grid"` 时，引自 [WAI-ARIA APG](https://www.w3.org/WAI/ARIA/apg/patterns/grid/)）：
-`←/→` 同行移动 · `↑/↓` 同列移动 · `Home`/`End` 行首行尾 · `Ctrl+Home`/`Ctrl+End` 表首表尾 ·
-`Enter`/`Space` 激活单元格内控件 · `Tab` 移出表格。
+**键盘契约**（**只在 `role="grid"` 时适用**，引自
+[APG Grid Pattern](https://www.w3.org/WAI/ARIA/apg/patterns/grid/)）：
+`←/→` 左右移一格 · `↑/↓` 上下移一格 · `Home`/`End` **本行**首末 ·
+`Ctrl+Home`/`Ctrl+End` 全表首末 · `Enter` 进入单元格（**禁用**方向键导航、把焦点交给格内控件）·
+`Esc` 退出并恢复方向键导航 · `Ctrl+Space` 选整列 · `Shift+Space` 选整行 · `Shift+方向键` 扩展选区 ·
+`Tab` 离开表格（grid 是复合控件，**整个 grid 只占一个 Tab 停靠点**）。
 
 **不要用 `<div>` 搭表格**，除非同时补齐 `role="table"` 与 `role="row"` / `role="columnheader"` /
 `role="cell"` —— 缺了它们，屏幕阅读器读不出任何行列关系。
@@ -622,15 +626,19 @@ tip.style.display = ''        // 错
 
 - [ ] 列宽是**显式**的吗？`table-layout: fixed` 了吗？数字列有 `tabular-nums` 吗？
 - [ ] **容器高度在数据到达前就固定**了吗？（加载不该推动页面）
-- [ ] 每个 `<th>` 都有 `scope="col"` 吗？—— `grep '<th' | grep -v 'scope='` 应当无输出
+- [ ] **复杂**表格（表头不在第一行 / 列、多级表头）的 `<th>` 有 `scope` 吗？——
+      简单表格只用 `<th>` 就够（**WCAG H63 的原话**），**别把 `scope` 当成每个 `<th>` 的硬性要求**
 - [ ] 悬停就能读到**全部字段**吗？（不必点击）
 - [ ] 所有视图都从**同一个**过滤状态派生吗？（各自过滤迟早不一致）
 - [ ] 用下面几条命令扫过一遍吗？**一条规则如果变不成一条命令，就等于检查不了。**
       ```sh
-      grep -n '<text' x.html                        # 文字不许画进会被横向拉伸的 SVG
-      grep -n 'table-layout' x.html | grep -v fixed # 列宽必须由 <colgroup> 决定
-      grep -nE '#[0-9a-fA-F]{3,8}' src/*.js         # 代码里不许出现字面色值，只用 token
-      grep -n "display = ''" src/*.js               # tooltip 显示不能写空串（见 §8 那个坑）
+      # x.html 换成你的页面。单文件页面没有 src/，后半段自然会报"找不到" —— 忽略即可
+      grep -n '<text' x.html                         # 文字不许画进会被横向拉伸的 SVG
+      grep -n 'table-layout' x.html | grep -v fixed  # 列宽必须由 <colgroup> 决定
+      grep -nE '#[0-9a-fA-F]{3,8}' x.html src/*.js 2>/dev/null
+      #   ↑ 只列出**候选**。合格与否要人看：自包含页面必然在 :root 里写字面色值，
+      #     判据是"字面色值只出现在 token 定义块里"，这一步 grep 替不了
+      grep -n "display = ''" x.html src/*.js 2>/dev/null   # tooltip 不能写空串（见 §8）
       ```
 - [ ] 深浅两套主题都验过吗？
 
