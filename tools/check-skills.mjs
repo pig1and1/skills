@@ -219,5 +219,61 @@ for (const name of skills) {
   }
 }
 
+/* ---- 10. README 点名的路径与技能名，都得真实存在 ---- */
+// 为什么：README 是仓库的**前门**，而此前**没有任何检查器看过它**。
+// 2026-09-14 实测过它过时到什么程度：它列了 12 个参考文件而实际有 22 个（漏 10 个）——
+// 那和 SKILL.md 里"存在却没被索引"是同一类缺陷，只不过长在文档里，没人扫。
+// （那份清单已经删掉，改成指向 skill 自己的索引；所以这里查的是它**仍然点名的**路径与技能名。）
+const readmePath = join(ROOT, 'README.md')
+if (existsSync(readmePath)) {
+  console.log('\n=== README ===')
+  const readme = readFileSync(readmePath, 'utf8')
+
+  // 全仓库文件索引：README 里会写裸文件名（`bar.js`）和命令（`node --test`），
+  // 死拼路径会满屏误报。所以判定是"这个 token 能不能在仓库里找到"。
+  const allFiles = walk(ROOT).map(p => relative(ROOT, p).split(/[\\/]/).join('/'))
+  const allDirs = new Set()
+  for (const p of allFiles) {
+    const parts = p.split('/')
+    for (let i = 1; i < parts.length; i++) allDirs.add(parts.slice(0, i).join('/') + '/')
+  }
+  const resolves = (t) => {
+    const clean = t.replace(/\/$/, '')
+    // 裸名字（`bar.js` / `references/`）也算数 —— README 里就是这么写的。
+    // 第一版只比精确路径，于是 `references/` 被判成"不存在"（它只作为
+    // `frontend-tables-and-charts/references/` 存在）。**检查器误报第 6 次。**
+    const dirs = [...allDirs]
+    return allFiles.includes(clean) ||
+      allFiles.some(f => f.endsWith('/' + clean)) ||
+      dirs.some(d => d === clean + '/' || d.endsWith('/' + clean + '/'))
+  }
+
+  const FILEISH = /^[A-Za-z0-9_][A-Za-z0-9_./-]*\.(mjs|js|ts|tsx|css|html|md|json|yml|yaml)$/
+  const DIRISH = /^[A-Za-z0-9_][A-Za-z0-9_./-]*\/$/
+  const candidates = []
+  const seen = new Set()
+  for (const m of readme.matchAll(/`([^`\n]+)`/g)) {
+    const t = m[1].trim()
+    if (seen.has(t)) continue
+    seen.add(t)
+    if (/[*<>{}|]/.test(t) || /\s/.test(t)) continue          // 通配符 / 占位符 / 命令 → 跳过
+    if (!FILEISH.test(t) && !DIRISH.test(t)) continue
+    candidates.push(t)
+  }
+  const missing = candidates.filter(t => !resolves(t))
+  if (missing.length) fail(`README 点名了仓库里不存在的路径: ${missing.join(', ')}`)
+  else ok(`README 点名的 ${candidates.length} 个路径都能在仓库里找到`)
+
+  // 技能名（`### \`xxx\`` 这种标题）必须是有 SKILL.md 的目录
+  const badSkills = []
+  for (const m of readme.matchAll(/^###\s+`([^`]+)`/gm)) {
+    const n = m[1].trim()
+    if (!/^[a-z][a-z0-9-]{3,}$/.test(n)) continue
+    if (!skills.includes(n)) badSkills.push(n)
+  }
+  if (badSkills.length) fail(`README 列了不存在的技能: ${badSkills.join(', ')}`)
+  else ok('README 列出的技能名与目录一致')
+}
+
 console.log(`\n${fails ? fails + ' 项失败' : '全部通过'}`)
 process.exit(fails ? 1 : 0)
