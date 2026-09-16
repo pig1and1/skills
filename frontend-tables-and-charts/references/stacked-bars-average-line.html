@@ -74,7 +74,7 @@
   /* ---- 排版层次 ---- */
   .head { margin-bottom:28px; }
   .finding {                       /* 结论式标题：说的是发现，不是"图表" */
-    font-size:19px; font-weight:640; line-height:1.4;
+    font-size:19px; font-weight:620; line-height:1.4;
     color:var(--ink); letter-spacing:-.005em; margin:0 0 6px;
   }
   .finding em { font-style:normal; color:var(--accent); }
@@ -107,7 +107,7 @@
   /* 折线末端的直接标注（比图例更快被读到） */
   .endlabel {
     position:absolute; transform:translateY(-50%);
-    font-size:11px; font-weight:600; color:var(--accent);
+    font-size:11px; font-weight:620; color:var(--accent);
     background:var(--surface); padding:1px 5px; border-radius:5px;
     pointer-events:none; white-space:nowrap;
   }
@@ -123,7 +123,7 @@
     box-shadow:0 8px 28px -6px rgba(10,12,20,.22), 0 2px 6px -2px rgba(10,12,20,.12);
     white-space:nowrap;
   }
-  .tip .d { font-weight:640; color:var(--ink); margin-bottom:5px; }
+  .tip .d { font-weight:620; color:var(--ink); margin-bottom:5px; }
   .tip .r { display:flex; align-items:center; gap:8px; line-height:1.9; }
   .tip .r i { width:9px; height:9px; border-radius:3px; flex:none; }
   .tip .r b { margin-left:auto; padding-left:16px; font-variant-numeric:tabular-nums; color:var(--ink); }
@@ -139,8 +139,8 @@
   .detail .t { font-size:13px; font-weight:620; color:var(--ink); margin-bottom:12px; }
   .detail .row { display:flex; gap:34px; flex-wrap:wrap; }
   .detail .c .k { font-size:11px; color:var(--muted); margin-bottom:2px; }
-  .detail .c .v { font-size:19px; font-weight:640; color:var(--ink); font-variant-numeric:tabular-nums; letter-spacing:-.01em; }
-  .detail .c .v small { font-size:11px; font-weight:500; color:var(--muted); margin-left:3px; letter-spacing:0; }
+  .detail .c .v { font-size:19px; font-weight:620; color:var(--ink); font-variant-numeric:tabular-nums; letter-spacing:-.01em; }
+  .detail .c .v small { font-size:11px; font-weight:400; color:var(--muted); margin-left:3px; letter-spacing:0; }
   .detail .ph { color:var(--muted); font-size:13px; }
   .dot { display:inline-block; width:8px; height:8px; border-radius:3px; margin-right:7px; vertical-align:1px; }
 
@@ -184,11 +184,11 @@
   .data th, .data td { height:48px; padding:0 16px; text-align:right; border:0;
                        box-shadow:inset 0 -1px 0 var(--hair); }
   .data th:first-child, .data td:first-child { text-align:left; }
-  .data thead th { background:var(--sunken); color:var(--muted); font-size:11px; font-weight:560; }
+  .data thead th { background:var(--sunken); color:var(--muted); font-size:11px; font-weight:620; }
   .data tbody tr { transition:background .14s ease; }
   .data tbody tr:hover { background:var(--hover); }
   .data tbody tr[aria-selected="true"] { background:var(--accent-soft); }
-  .data td:last-child { font-weight:600; color:var(--ink); }
+  .data td:last-child { font-weight:620; color:var(--ink); }
 
   @media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
   @media (max-width:680px) { body { padding:28px 18px 40px; } .card, .detail { padding-left:16px; padding-right:16px; } }

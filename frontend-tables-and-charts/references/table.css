@@ -62,7 +62,7 @@ table.data-table {
   background: var(--table-header-bg);
   color: var(--table-header-fg);
   font-size: 12px;
-  font-weight: 550;
+  font-weight: 620;
   letter-spacing: 0.01em;
   /* Separate header from body by weight and colour, not by a heavy rule. */
   box-shadow: inset 0 -1px 0 var(--table-border);

@@ -236,6 +236,25 @@ for (const name of skills) {
     const note = usedExceptions.size ? `（另有 ${usedExceptions.size} 处已声明的例外: ${[...usedExceptions].join(', ')}）` : ''
     ok(`参考实现的字号都落在 §11 的阶梯上${note}`)
   }
+
+  /* ---- 9b. 参考实现的字重也必须落在阶梯上 ---- */
+  // §11 说"**最多两个字重**"。2026-09-14 实测：六个参考实现里用了**七种**
+  // （400 / 500 / 550 / 560 / 600 / 620 / 640）—— **20 处违规**。
+  // 这和字号那次是同一类毛病：**规则立了，但没人拿它量范本**。
+  // 字号当时量了（第 9 项），**字重漏了**，所以补上这项 —— 它本该和第 9 项同时存在。
+  const WEIGHTS = [400, 620]
+  const KEYWORDS = ['inherit', 'normal', 'bold', 'bolder', 'lighter', 'unset', 'initial']
+  const offWeight = []
+  for (const f of present.filter(x => /\.(css|html|ts)$/.test(x))) {
+    const t = readFileSync(join(refDir, f), 'utf8')
+    for (const m of t.matchAll(/font-weight:\s*([\w.]+)/g)) {
+      if (KEYWORDS.includes(m[1])) continue
+      if (WEIGHTS.includes(Number(m[1]))) continue
+      offWeight.push(`${f} ${m[1]}`)
+    }
+  }
+  if (offWeight.length) fail(`字重不在阶梯上（只有 ${WEIGHTS.join(' / ')}）: ${[...new Set(offWeight)].join(', ')}`)
+  else ok(`参考实现的字重都落在阶梯上（${WEIGHTS.join(' / ')}）`)
 }
 
 /* ---- 10. README 点名的路径与技能名，都得真实存在 ---- */
