@@ -3,7 +3,9 @@
 模型可加载的技能集合。每个子目录是一个独立技能：`SKILL.md` 是技能定义（含
 `name` 与 `description` 元数据），`references/` 里的文件按需加载。
 
-技能是纯 Markdown + 参考文件，没有任何构建步骤，也不绑定特定 harness。
+技能本身是 Markdown + 参考文件，没有构建步骤，也不绑定特定 harness；
+`references/` 里另有一批零依赖的 `*-check.mjs`（纯 ESM，用 CDP 驱动本机 Edge），
+用来把参考实现**真跑一遍** —— 见下面的「怎么验证」。
 
 ## 包含的技能
 
@@ -45,25 +47,30 @@
 
 **参考实现**（`frontend-tables-and-charts/references/`）
 
-| 文件 | 内容 |
-|---|---|
-| `table.css` | 样式基线，每段注明它防的是哪个故障，含深浅主题 token |
-| `VirtualTable.tsx` | React 固定行高虚拟表格骨架，无第三方依赖 |
-| `LineChart.ts` | Canvas 折线图骨架：DPR 正确、容器预留空间、resize 节流 |
-| `verify.html` | 自验证页面：滚动前后列宽快照、数字列宽度波动、`content-visibility` 塌陷复现，全部读数值并自动判定 |
-| `dashboard.html` | 复杂示例：brush 选择驱动多视图联动、hover 十字准线、序列切换、加载/空态、5000 行虚拟表格与图表共享同一处过滤状态 |
-| `dirty-data-cases.html` | 脏数据对跑：9 个病态数据集（全同值、单点、空集、脏值、乱序、时间缺口、离群、类别爆炸、5 万点），朴素实现 vs 加固实现，逐例给出诊断数值 |
-| `stacked-bars-average-line.html` | 复合图表：三段堆叠柱 + 同量纲平均折线共用从 0 起的轴；点击选中并保持（区别于悬停）、整柱命中区、图例切换、表行联动 |
-| `visual-quality.md` | 手艺层：同一份数据怎么画才不业余 —— 网格与轴的层次、颜色数量、标签密度、空态、强调色只留给"要说的那件事" |
-| `chart-correctness.md` | 正确性判据：轴是否从 0、对数轴何时用、双轴为什么撒谎、截断轴的代价、聚合口径（"平均"≠"求和"） |
-| `dirty-data.md` | 脏数据处理对照：空洞、脏值、重复时间戳、乱序、恒定段、尖峰、极端量级、恶意标签，每类的显示后果与处置 |
-| `composite-charts.md` | 复合图表：多量纲该拆图而不是加第二根轴；堆叠柱 + 折线的同量纲前提与命中区设计 |
-| `evidence.md` | 每条规则的公开来源，以及**验证过程本身**的 7 个失误记录（自查脚本比被查对象更常出错） |
+⚠️ **完整清单不在这里抄一份。** 它在 `SKILL.md` 的「参考实现」一节，而
+`tools/check-skills.mjs` 会核对那份清单与目录是否一致（引用了不存在的文件、
+存在却没被索引的文件，都会报红）。本 README 只说它大致怎么分层：
+
+- **代码骨架** —— `table.css`（样式基线，每段注明它防的是哪个故障，含深浅主题 token）、
+  `VirtualTable.tsx`（React 固定行高虚拟表格，无第三方依赖）、
+  `LineChart.ts`（Canvas 折线图：DPR 正确、容器预留空间、resize 节流，**两条轴都有标签**）
+- **专题说明**（判据与依据，动手前先读）—— `visual-quality.md`、`chart-correctness.md`、
+  `dirty-data.md`、`composite-charts.md`、`evidence.md`（每条规则的公开来源，
+  **以及验证过程本身的失误记录**）
+- **成品示例**（是答案不是读本）—— `dashboard.html`（brush 联动、十字准线、5000 行虚拟表格
+  与图表共享过滤状态）、`dirty-data-cases.html`（9 个病态数据集对跑，朴素实现 vs 加固实现）、
+  `stacked-bars-average-line.html`、`query-console.html`，以及两个 `*-probe.html`
+- **可执行检查** —— `reference-smoke.mjs`（把每个 HTML 真跑一遍，只断言"没有未捕获异常"）、
+  各 `*-check.mjs`，以及一次跑完所有的 `run-all-checks.mjs`
+
+> **为什么这里不抄一份完整清单**：抄一份就会有两份，而两份迟早不一致 ——
+> 这个 README 原先就漏掉了 **10 个**参考文件，还把「踩过的坑」表的行数写成 **7**（实际 **36**）。
+> **同一件事写两遍，第二遍一定和第一遍不一样。**
 
 ## 这些规则从哪来
 
 不是凭空写的。每条稳定性与正确性规则都对应一个**公开的故障记录**，
-`SKILL.md` 第 9 节列出了出处，包括：
+出处记在 `SKILL.md` 的「**参照标准**」一节与 `references/evidence.md`（含 A/B/C/D 证据等级），包括：
 
 - `srelens/srelens` #298 —— 虚拟滚动下 `table-layout: auto` 导致列宽漂移
 - `nesquena/hermes-webui` #5672 —— DOM 重建丢失 `content-visibility` 的尺寸记忆，
@@ -73,7 +80,8 @@
 - Carbon 设计系统 —— Y 轴基线判据
 
 参考实现是**起点而非成品**，未经真实项目运行验证；用之前按自己的列宽、行高与
-配色改一遍。
+配色改一遍。它们现在有**可执行的检查**（见「怎么验证」），但那些检查只保证
+"页面是活的、声称的动作真的会发生"，**不保证它适合你的场景**。
 
 ## 其它
 
@@ -87,16 +95,20 @@ charts/
 ├─ src/line.js          bar.js       scatter.js
 ├─ src/histogram.js     boxplot.js   heatmap.js    渲染层：只把 core 算出的数字放进 SVG
 ├─ src/theme.css        主题层：组件不认识颜色，只引用 token
-├─ tests/               10 个测试文件、253 个断言（node --test，零依赖）
+├─ tests/               11 个测试文件、264 条断言（node --test，零依赖）
 ├─ example.html         90 行脚本调用组件
 ├─ complex-test.html    浏览器端自检页：把同一批脏数据渲染出来并显示实际读数
+├─ renderers.html       六个渲染器的并排总览（browser-check 就是打开它）
+├─ showcase.html        更完整的演示页
+├─ browser-check.mjs    浏览器检查：74 项，CDP 驱动 headless Edge
 └─ serve.js             零依赖静态服务器（模块化脚本不能走 file://）
 ```
 
 ```sh
 cd charts
-node --test      # 跑测试
-node serve.js    # 打开 http://127.0.0.1:4173/example.html
+node --test              # 264 条断言
+node serve.js            # 起服务：http://127.0.0.1:4173/renderers.html
+node browser-check.mjs   # 74 项浏览器检查（需要上面的服务在跑）
 ```
 
 **为什么这样分层**：一个图表的数学如果长在渲染函数里，就只能靠看像素来检查 ——
@@ -105,6 +117,30 @@ node serve.js    # 打开 http://127.0.0.1:4173/example.html
 
 **已知局限**：渲染层的像素位置、CSS 层叠与 DPR 没有回归保护；没有类型与发布流程。
 `tests/tokens.test.js` 专门盯着"引用了未声明 token"这类**不报错的静默失败**。
+
+## 怎么验证
+
+两层，都是零依赖的（除了要有本机 Edge）：
+
+```sh
+node tools/check-skills.mjs .        # 仓库级静态检查
+
+cd frontend-tables-and-charts/references
+node run-all-checks.mjs              # 把每个 HTML 与 TS 骨架真跑一遍
+```
+
+`check-skills.mjs` 查的是**文本的性质**：引用的文件是否存在、有没有文件存在却没被索引、
+`§N` 交叉引用有没有落点、HTML 是否自包含、字号是否都在阶梯上、`description` 里的每项声称
+在正文里有没有落点。
+
+`run-all-checks.mjs` 查的是**行为**：页面加载有没有未捕获异常、canvas 上有没有真的画出东西、
+交互是否按声称工作。它按**三种**结果归类 —— 通过 / 失败 / **未校验**
+（例如机器上没有 `tsc` 时，TS 骨架那一条就是未校验）。**它不把「未校验」算成通过。**
+
+> **为什么两层都要**：静态检查全绿**不代表页面是活的**。这个项目里出现过
+> 一个"推荐为复杂示例"的页面**加载即抛异常、三个图表一个都没画**，而当时所有静态检查都通过；
+> 也出现过工具页**打印"漂移是预期结果"、而它自己刚量到零漂移**。
+> 这两种都只有真跑一遍才看得见。
 
 ## 用法
 
